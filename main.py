@@ -654,59 +654,6 @@ st.title("Resumo da Conversa")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Handle prompt generation request
-if st.session_state.get("prompt_to_generate") is not None:
-    _gen_idx = st.session_state["prompt_to_generate"]
-    if _gen_idx < len(st.session_state.messages):
-        _summary = st.session_state.messages[_gen_idx]["content"]
-        _source = st.session_state.get(f"src_{_gen_idx}", "")
-        _provider = _make_provider(provider_name, model_name)
-
-        _prompt_template = f"""Com base no resumo abaixo de uma conversa entre desenvolvedor e IA,
-gere um PROMPT DE CONTINUAÇÃO otimizado para uso em CLIs de IA (Gemini CLI, OpenCode, etc.).
-
-O prompt deve seguir esta estrutura em markdown:
-
-- **Contexto**: resumo do que já foi feito (1 parágrafo)
-- **Objetivo**: o que fazer a seguir, claro e específico
-- **Restrições**: stack, linguagem, padrões, estilo (se mencionado)
-- **Tarefas**: lista de passos concretos e acionáveis
-
-{f'**Ferramenta alvo**: {_source}' if _source else ''}
-
-Resumo da conversa:
-{{_summary}}
-
-Gere APENAS o prompt final (sem explicações), formatado em markdown.
-O prompt deve ser autocontido — o dev deve conseguir copiá-lo e colar
-em qualquer CLI de IA para continuar o trabalho imediatamente."""
-
-        _prompt_text = _prompt_template.replace("{_summary}", _summary)
-
-        with st.chat_message("assistant"):
-            with st.spinner("🤖 Gerando prompt de continuidade..."):
-                try:
-                    response = st.write_stream(
-                        _async_iter_to_sync(
-                            _provider,
-                            "Você é um gerador de prompts para IAs. "
-                            "Seu trabalho é criar prompts estruturados, acionáveis e autocontidos. "
-                            "Escreva em português do Brasil.",
-                            _prompt_text,
-                        )
-                    )
-                    prefix = f"📋 *Prompt gerado a partir do resumo acima*"
-                    if _source:
-                        prefix += f" | Fonte: {_source}"
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": response, "is_prompt": True}
-                    )
-                except Exception as exc:
-                    st.error(f"❌ Erro ao gerar prompt: {exc}")
-
-    st.session_state["prompt_to_generate"] = None
-    st.rerun()
-
 for idx, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -764,3 +711,52 @@ if not st.session_state.messages and not uploaded_files:
         "👈 Faça upload de um ou mais arquivos JSON de conversas com LLMs "
         "e clique em **Gerar Resumo** para começar."
     )
+
+# Handle prompt generation — runs AFTER messages render, so streaming stays at bottom
+if st.session_state.get("prompt_to_generate") is not None:
+    _gen_idx = st.session_state["prompt_to_generate"]
+    if _gen_idx < len(st.session_state.messages) and provider_name and model_name:
+        _summary = st.session_state.messages[_gen_idx]["content"]
+        _source = st.session_state.get(f"src_{_gen_idx}", "")
+        _provider = _make_provider(provider_name, model_name)
+
+        _source_line = f"- **Ferramenta alvo**: {_source}" if _source else ""
+
+        _prompt_for_llm = f"""Com base no resumo abaixo de uma conversa entre desenvolvedor e IA,
+gere um PROMPT DE CONTINUAÇÃO otimizado para uso em CLIs de IA (Gemini CLI, OpenCode, etc.).
+
+O prompt deve seguir esta estrutura:
+
+- **Contexto**: resumo do que já foi feito (1 parágrafo)
+- **Objetivo**: o que fazer a seguir, claro e específico
+- **Restrições**: stack, linguagem, padrões, estilo (se mencionado)
+- **Tarefas**: lista de passos concretos e acionáveis
+{_source_line}
+
+Resumo da conversa:
+{_summary}
+
+Gere APENAS o prompt final (sem explicações), formatado em markdown.
+O prompt deve ser autocontido — o dev deve conseguir copiá-lo e colar
+em qualquer CLI de IA para continuar o trabalho imediatamente."""
+
+        with st.chat_message("assistant"):
+            with st.spinner("🤖 Gerando prompt de continuidade..."):
+                try:
+                    response = st.write_stream(
+                        _async_iter_to_sync(
+                            _provider,
+                            "Você é um gerador de prompts para IAs. "
+                            "Seu trabalho é criar prompts estruturados, acionáveis e autocontidos. "
+                            "Escreva em português do Brasil.",
+                            _prompt_for_llm,
+                        )
+                    )
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": response, "is_prompt": True}
+                    )
+                except Exception as exc:
+                    st.error(f"❌ Erro ao gerar prompt: {exc}")
+
+    st.session_state["prompt_to_generate"] = None
+    st.rerun()
