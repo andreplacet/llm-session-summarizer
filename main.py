@@ -63,101 +63,103 @@ def _apply_theme(dark: bool) -> None:
     st.markdown(
         f"""
     <style>
-    /* Base */
-    .stApp, .main .block-container {{
+    /* ── Base ── */
+    .stApp {{
         background-color: {bg};
-        color: {fg};
     }}
-    h1, h2, h3, h4, h5, h6, p, li, label, span, div {{
-        color: {fg} !important;
-    }}
-    .stMarkdown {{
+    .main .block-container {{
         color: {fg};
     }}
 
-    /* Sidebar */
+    /* ── Text defaults ── */
+    .stMarkdown, .stMarkdown *, .st-emotion-cache-*, [data-testid="stMarkdownContainer"] * {{
+        color: {fg} !important;
+    }}
+    h1, h2, h3, h4, h5, h6, p, li, .st-emotion-cache-0 {{
+        color: {fg} !important;
+    }}
+
+    /* ── Sidebar ── */
     [data-testid="stSidebar"] {{
         background-color: {sbg};
-        border-right: 1px solid {border};
     }}
     [data-testid="stSidebar"] * {{
         color: {fg} !important;
     }}
+    [data-testid="stSidebar"] label, [data-testid="stSidebar"] .st-emotion-cache-1qg05tj {{
+        color: {fg} !important;
+    }}
 
-    /* Chat messages */
+    /* ── Selectbox dropdown (portal) ── */
+    div[data-baseweb="popover"] li, div[data-baseweb="popover"] div {{
+        color: {fg} !important;
+        background-color: {sbg} !important;
+    }}
+    div[data-baseweb="popover"] li:hover {{
+        background-color: {border} !important;
+    }}
+
+    /* ── Chat messages ── */
     [data-testid="stChatMessage"] {{
         background-color: {sbg} !important;
         border: 1px solid {border} !important;
         border-radius: 12px;
         padding: 12px 16px;
     }}
-    [data-testid="stChatMessage"] [data-testid="chatAvatarIcon-user"] {{
-        background-color: {accent} !important;
-    }}
-    [data-testid="stChatMessage"] [data-testid="chatAvatarIcon-assistant"] {{
-        background-color: #34a853 !important;
-    }}
 
-    /* Code blocks inside chat */
-    .stChatMessage code {{
+    /* ── Code blocks ── */
+    code {{
         background-color: {code_bg} !important;
         color: {code_fg} !important;
         padding: 2px 6px;
         border-radius: 4px;
     }}
-    .stChatMessage pre {{
+    pre {{
         background-color: {code_bg} !important;
-        border: 1px solid {border};
+        border: 1px solid {border} !important;
         border-radius: 8px;
         padding: 12px;
     }}
 
-    /* Inputs and buttons */
-    .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {{
+    /* ── Inputs ── */
+    input, textarea, [data-baseweb="select"] > div {{
         background-color: {input_bg} !important;
         color: {fg} !important;
         border-color: {border} !important;
     }}
-    .stButton > button {{
+
+    /* ── Buttons ── */
+    .stButton > button, .stDownloadButton > button {{
+        background-color: {sbg} !important;
         color: {fg} !important;
-        border-color: {border} !important;
+        border: 1px solid {border} !important;
     }}
     .stButton > button[kind="primary"] {{
         background-color: {accent} !important;
         color: #ffffff !important;
-    }}
-
-    /* File uploader */
-    div[data-testid="stFileUploaderDropzone"] {{
-        background-color: {sbg};
-        border-color: {border};
-    }}
-
-    /* Dividers */
-    hr {{
-        border-color: {border} !important;
-    }}
-
-    /* Download button */
-    .stDownloadButton > button {{
-        background-color: {sbg} !important;
-        color: {fg} !important;
-        border: 1px solid {border} !important;
     }}
     .stDownloadButton > button:hover {{
         border-color: {accent} !important;
         color: {accent} !important;
     }}
 
-    /* Expand/Collapse */
-    .streamlit-expanderHeader {{
+    /* ── File uploader ── */
+    div[data-testid="stFileUploaderDropzone"] {{
+        background-color: {sbg} !important;
+        border-color: {border} !important;
+    }}
+
+    /* ── Alerts / expander ── */
+    .stAlert, .streamlit-expanderHeader {{
         background-color: {sbg} !important;
         color: {fg} !important;
     }}
+    .streamlit-expanderHeader svg {{
+        fill: {fg} !important;
+    }}
 
-    /* Warning/info boxes */
-    .stAlert {{
-        background-color: {sbg} !important;
+    /* ── Divider ── */
+    hr {{
         border-color: {border} !important;
     }}
     </style>
@@ -267,7 +269,7 @@ _DIRECT_PROMPT = """Analise a conversa abaixo entre um desenvolvedor e uma IA e 
 - Início: {start_time}
 - Última atualização: {last_updated}
 - Total de mensagens relevantes: {msg_count}
-
+{source_block}
 **Conversa:**
 
 {conversation_text}
@@ -295,11 +297,13 @@ Gere o resumo final EXATAMENTE com as seguintes seções em markdown:
 Resumo final:"""
 
 
-def _build_direct_prompt(conversation: ParsedConversation) -> str:
+def _build_direct_prompt(conversation: ParsedConversation, source: str = "") -> str:
+    source_block = f"\n**Fonte da conversa:** {source}\n" if source else ""
     return _DIRECT_PROMPT.format(
         start_time=conversation.metadata.get("startTime", "N/A"),
         last_updated=conversation.metadata.get("lastUpdated", "N/A"),
         msg_count=len(conversation.messages),
+        source_block=source_block,
         conversation_text=_build_conversation_text(conversation.messages),
     )
 
@@ -388,23 +392,24 @@ def _run_chunked_summary(provider, conversation, model_name, max_concurrent: int
 
 
 def _handle_process(
-    provider, conversation, filenames, model_name, session_title
+    provider, conversation, filenames, model_name, session_title, session_source=""
 ) -> None:
     msg_count = len(conversation.messages)
 
     # Display user "message" bubble
     with st.chat_message("user"):
         files_list = "\n".join(f"- `{fn}`" for fn in filenames)
+        source_line = f"\n\n📋 *Fonte: {session_source}*" if session_source else ""
         st.markdown(
             f"**📂 {len(filenames)} arquivo(s) enviado(s):**\n\n{files_list}\n\n"
-            f"_{msg_count} mensagens extraídas_"
+            f"_{msg_count} mensagens extraídas_{source_line}"
         )
 
     # Generate summary
     with st.chat_message("assistant"):
         try:
             if msg_count <= CHUNK_SIZE:
-                prompt = _build_direct_prompt(conversation)
+                prompt = _build_direct_prompt(conversation, source=session_source)
                 response = st.write_stream(
                     _async_iter_to_sync(provider, SYSTEM_PROMPT, prompt)
                 )
@@ -596,6 +601,13 @@ with st.sidebar:
         placeholder="Ex: Configuração do Marten Outbox",
     )
 
+    session_source = st.text_input(
+        "📋 Fonte da conversa",
+        placeholder="Ex: Gemini CLI, VS Code chat, OpenCode, ChatGPT...",
+        help="Informe qual ferramenta gerou esta conversa. Isso será incluído no prompt "
+        "para ajudar o LLM a contextualizar melhor o resumo.",
+    )
+
     can_process = uploaded_files and (provider_name == "ollama" or _get_active_api_key())
     process_btn = st.button(
         "🔍 Gerar Resumo",
@@ -648,8 +660,6 @@ if "messages" not in st.session_state:
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "message_contexts" not in st.session_state:
-    st.session_state.message_contexts = {}
 
 for idx, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
@@ -660,24 +670,14 @@ for idx, msg in enumerate(st.session_state.messages):
         filename = (sanitized[:40] + "...") if len(sanitized) > 40 else sanitized
         filename = (filename or "resumo") + ".md"
 
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            st.download_button(
-                "📥 Baixar .md",
-                data=msg["content"],
-                file_name=filename,
-                mime="text/markdown",
-                key=f"dl_{idx}",
-                use_container_width=True,
-            )
-        with col2:
-            with st.expander("💬 Contexto da sessão"):
-                st.text_area(
-                    "Qual CLI/chat, projeto e stack foram usados nesta conversa?",
-                    key=f"ctx_{idx}",
-                    placeholder="Ex: Gemini CLI, projeto Adonis (.NET + Marten)...",
-                    label_visibility="collapsed",
-                )
+        st.download_button(
+            "📥 Baixar .md",
+            data=msg["content"],
+            file_name=filename,
+            mime="text/markdown",
+            key=f"dl_{idx}",
+            use_container_width=True,
+        )
 
 if process_btn and uploaded_files:
     try:
@@ -686,7 +686,7 @@ if process_btn and uploaded_files:
         else:
             provider = GeminiProvider(model=model_name, api_key=_get_active_api_key())
         conversation, filenames = _parse_all_files(uploaded_files)
-        _handle_process(provider, conversation, filenames, model_name, session_title)
+        _handle_process(provider, conversation, filenames, model_name, session_title, session_source)
         st.rerun()
     except ValueError as exc:
         st.error(str(exc))
