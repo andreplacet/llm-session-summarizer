@@ -39,6 +39,7 @@ class Database:
                     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
                     content TEXT NOT NULL,
                     model_used TEXT NOT NULL,
+                    type TEXT NOT NULL DEFAULT 'summary',
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
 
@@ -49,6 +50,11 @@ class Database:
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+            # Migration: add type column if missing (for databases created before this field)
+            try:
+                conn.execute("ALTER TABLE summaries ADD COLUMN type TEXT NOT NULL DEFAULT 'summary'")
+            except sqlite3.OperationalError:
+                pass  # column already exists
 
     def save_session(
         self,
@@ -66,12 +72,12 @@ class Database:
                 (id, title, source, provider, filenames, message_count, datetime.utcnow()),
             )
 
-    def save_summary(self, id: str, session_id: str, content: str, model_used: str):
+    def save_summary(self, id: str, session_id: str, content: str, model_used: str, type: str = "summary"):
         with self._connect() as conn:
             conn.execute(
-                """INSERT OR REPLACE INTO summaries (id, session_id, content, model_used, created_at)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (id, session_id, content, model_used, datetime.utcnow()),
+                """INSERT OR REPLACE INTO summaries (id, session_id, content, model_used, type, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (id, session_id, content, model_used, type, datetime.utcnow()),
             )
 
     def get_all_sessions(self) -> list[sqlite3.Row]:
