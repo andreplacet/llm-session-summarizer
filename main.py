@@ -269,7 +269,7 @@ _DIRECT_PROMPT = """Analise a conversa abaixo entre um desenvolvedor e uma IA e 
 - Início: {start_time}
 - Última atualização: {last_updated}
 - Total de mensagens relevantes: {msg_count}
-{source_block}
+
 **Conversa:**
 
 {conversation_text}
@@ -297,13 +297,11 @@ Gere o resumo final EXATAMENTE com as seguintes seções em markdown:
 Resumo final:"""
 
 
-def _build_direct_prompt(conversation: ParsedConversation, source: str = "") -> str:
-    source_block = f"\n**Fonte da conversa:** {source}\n" if source else ""
+def _build_direct_prompt(conversation: ParsedConversation) -> str:
     return _DIRECT_PROMPT.format(
         start_time=conversation.metadata.get("startTime", "N/A"),
         last_updated=conversation.metadata.get("lastUpdated", "N/A"),
         msg_count=len(conversation.messages),
-        source_block=source_block,
         conversation_text=_build_conversation_text(conversation.messages),
     )
 
@@ -392,24 +390,23 @@ def _run_chunked_summary(provider, conversation, model_name, max_concurrent: int
 
 
 def _handle_process(
-    provider, conversation, filenames, model_name, session_title, session_source=""
+    provider, conversation, filenames, model_name, session_title
 ) -> None:
     msg_count = len(conversation.messages)
 
     # Display user "message" bubble
     with st.chat_message("user"):
         files_list = "\n".join(f"- `{fn}`" for fn in filenames)
-        source_line = f"\n\n📋 *Fonte: {session_source}*" if session_source else ""
         st.markdown(
             f"**📂 {len(filenames)} arquivo(s) enviado(s):**\n\n{files_list}\n\n"
-            f"_{msg_count} mensagens extraídas_{source_line}"
+            f"_{msg_count} mensagens extraídas_"
         )
 
     # Generate summary
     with st.chat_message("assistant"):
         try:
             if msg_count <= CHUNK_SIZE:
-                prompt = _build_direct_prompt(conversation, source=session_source)
+                prompt = _build_direct_prompt(conversation)
                 response = st.write_stream(
                     _async_iter_to_sync(provider, SYSTEM_PROMPT, prompt)
                 )
@@ -601,13 +598,6 @@ with st.sidebar:
         placeholder="Ex: Configuração do Marten Outbox",
     )
 
-    session_source = st.text_input(
-        "📋 Fonte da conversa",
-        placeholder="Ex: Gemini CLI, VS Code chat, OpenCode, ChatGPT...",
-        help="Informe qual ferramenta gerou esta conversa. Isso será incluído no prompt "
-        "para ajudar o LLM a contextualizar melhor o resumo.",
-    )
-
     can_process = uploaded_files and (provider_name == "ollama" or _get_active_api_key())
     process_btn = st.button(
         "🔍 Gerar Resumo",
@@ -670,14 +660,23 @@ for idx, msg in enumerate(st.session_state.messages):
         filename = (sanitized[:40] + "...") if len(sanitized) > 40 else sanitized
         filename = (filename or "resumo") + ".md"
 
-        st.download_button(
-            "📥 Baixar .md",
-            data=msg["content"],
-            file_name=filename,
-            mime="text/markdown",
-            key=f"dl_{idx}",
-            use_container_width=True,
-        )
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.download_button(
+                "📥 Baixar .md",
+                data=msg["content"],
+                file_name=filename,
+                mime="text/markdown",
+                key=f"dl_{idx}",
+                use_container_width=True,
+            )
+        with col2:
+            st.text_input(
+                "📋 Fonte da conversa (opcional)",
+                key=f"src_{idx}",
+                placeholder="Ex: Gemini CLI, OpenCode, VS Code chat...",
+                label_visibility="collapsed",
+            )
 
 if process_btn and uploaded_files:
     try:
@@ -686,7 +685,7 @@ if process_btn and uploaded_files:
         else:
             provider = GeminiProvider(model=model_name, api_key=_get_active_api_key())
         conversation, filenames = _parse_all_files(uploaded_files)
-        _handle_process(provider, conversation, filenames, model_name, session_title, session_source)
+        _handle_process(provider, conversation, filenames, model_name, session_title)
         st.rerun()
     except ValueError as exc:
         st.error(str(exc))
