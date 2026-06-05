@@ -11,7 +11,8 @@
 - Streaming da resposta (resumo aparece progressivamente)
 - Histórico de sessões com SQLite local
 - Dark mode
-- Providers extensíveis (Gemini hoje, OpenAI/Claude amanhã)
+- **Ollama** — modelos locais, sem API key, sem custo (recomendado)
+- Gemini — via API key do AI Studio (requer créditos pré-pagos)
 
 ## 🔐 Segurança e LGPD
 
@@ -58,12 +59,15 @@ Na próxima sessão: usuário digita senha mestra → descriptografa
 cd ~/dev/personal/python/llm-session-summarizer
 
 # Criar virtualenv
-python -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 
 # Instalar dependências
 pip install -r requirements.txt
 
-# Desenvolvimento local (opcional)
+# Para usar Ollama (recomendado):
+ollama serve  # em outro terminal
+
+# Para usar Gemini (opcional):
 cp .env.example .env
 # Editar .env com sua GEMINI_API_KEY
 
@@ -71,7 +75,7 @@ cp .env.example .env
 streamlit run main.py
 ```
 
-> Para uso local com `.env`, não configure chave na UI. O app usa `.env` como fallback automaticamente.
+> **Recomendação:** Use Ollama com modelos locais (`deepseek-v4-flash`, `nemotron-3-super`, etc.) — zero custo, zero API key, privacidade total.
 
 ## Estrutura
 
@@ -97,7 +101,8 @@ streamlit run main.py
     │   └── templates.py       # Templates de prompt (sistema, chunk, merge)
     ├── providers/
     │   ├── base.py            # AbstractProvider (interface)
-    │   └── gemini.py          # Provider Gemini (google-genai)
+    │   ├── gemini.py          # Provider Gemini (google-genai)
+    │   └── ollama.py          # Provider Ollama (localhost:11434)
     ├── chunker.py             # Map-reduce para conversas longas
     └── database.py            # SQLite CRUD (sessões + chaves criptografadas)
 ```

@@ -15,7 +15,8 @@ from src.crypto import encrypt, decrypt
 from src.models import ParsedConversation, Message
 from src.parsers.gemini_cli import GeminiCLIParser
 from src.prompts.templates import SYSTEM_PROMPT
-from src.providers.gemini import AVAILABLE_MODELS, DEFAULT_MODEL, GeminiProvider
+from src.providers.gemini import AVAILABLE_MODELS as GEMINI_MODELS, MODEL_LABELS as GEMINI_LABELS, DEFAULT_MODEL as GEMINI_DEFAULT, GeminiProvider
+from src.providers.ollama import OllamaProvider
 from src.database import Database
 
 load_dotenv()
@@ -133,6 +134,11 @@ def _get_active_api_key() -> str | None:
     return st.session_state.get("api_key") or os.getenv("GEMINI_API_KEY")
 
 
+@st.cache_data(ttl=60)
+def _get_ollama_models() -> list[str]:
+    return asyncio.run(OllamaProvider.list_models())
+
+
 # ---------------------------------------------------------------------------
 # Prompt builders
 # ---------------------------------------------------------------------------
@@ -222,7 +228,7 @@ def _parse_all_files(uploaded_files) -> tuple[ParsedConversation, list[str]]:
     return combined, filenames
 
 
-def _run_chunked_summary(provider, conversation, model_name) -> str:
+def _run_chunked_summary(provider, conversation, model_name, max_concurrent: int = 5) -> str:
     """Process chunks with progress bar, then stream the merge."""
     import asyncio
 
@@ -234,19 +240,21 @@ def _run_chunked_summary(provider, conversation, model_name) -> str:
 
     progress = st.progress(0, text="Processando trechos da conversa...")
     status = st.empty()
+    semaphore = asyncio.Semaphore(max_concurrent)
 
     async def _summarize_chunk(chunk_conv: ParsedConversation, idx: int) -> str:
-        text = _build_conversation_text(chunk_conv.messages)
-        prompt = CHUNK_PROMPT.format(conversation_text=text)
-        result = await provider.generate(
-            system_prompt="Você é um analista que resume conversas técnicas. Escreva em português do Brasil.",
-            user_prompt=prompt,
-        )
-        progress.progress(
-            (idx + 1) / total_chunks,
-            text=f"Processando trecho {idx + 1}/{total_chunks}...",
-        )
-        return f"--- Trecho {idx + 1} de {total_chunks} ---\n{result}"
+        async with semaphore:
+            text = _build_conversation_text(chunk_conv.messages)
+            prompt = CHUNK_PROMPT.format(conversation_text=text)
+            result = await provider.generate(
+                system_prompt="Você é um analista que resume conversas técnicas. Escreva em português do Brasil.",
+                user_prompt=prompt,
+            )
+            progress.progress(
+                (idx + 1) / total_chunks,
+                text=f"Processando trecho {idx + 1}/{total_chunks}...",
+            )
+            return f"--- Trecho {idx + 1} de {total_chunks} ---\n{result}"
 
     async def _run_all() -> list[str]:
         tasks = []
@@ -292,7 +300,10 @@ def _handle_process(
                     _async_iter_to_sync(provider, SYSTEM_PROMPT, prompt)
                 )
             else:
-                response = _run_chunked_summary(provider, conversation, model_name)
+                response = _run_chunked_summary(
+                    provider, conversation, model_name,
+                    max_concurrent=1 if isinstance(provider, OllamaProvider) else 5,
+                )
         except Exception as exc:
             response = f"❌ **Erro ao gerar resumo:** {exc}"
             st.error(response)
@@ -335,101 +346,134 @@ with st.sidebar:
 
     st.divider()
 
-    # ── Key management ──
-    st.subheader("🔑 Chave da API")
+    # ── Provider selector ──
+    provider_name = st.selectbox(
+        "🤖 Provedor",
+        ["ollama", "gemini"],
+        index=0,
+        help="Ollama roda localmente (sem API key). Gemini usa API do Google AI Studio.",
+    )
 
-    if _key_is_unlocked():
-        st.success("🔓 Chave desbloqueada")
-        masked = st.session_state.api_key[:6] + "•••" + st.session_state.api_key[-4:]
-        st.caption(f"`{masked}`")
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔒 Bloquear", use_container_width=True):
-                _lock_key()
-                st.rerun()
-        with col2:
-            if st.button("🗑️ Remover", use_container_width=True):
-                _delete_stored_key()
-                st.rerun()
-
-    elif _key_is_stored():
-        st.info("🔒 Chave criptografada salva")
-        passphrase = st.text_input(
-            "Senha mestra",
-            type="password",
-            placeholder="Digite sua senha para desbloquear",
-            key="unlock_passphrase",
+    # ── Key management (only for Gemini) ──
+    if provider_name == "gemini":
+        st.warning(
+            "⚠️ **Aviso importante:** O Google descontinuou o tier gratuito da API Gemini. "
+            "Todas as requisições agora exigem **créditos pré-pagos** comprados no "
+            "[AI Studio](https://aistudio.google.com/apikey). "
+            "Recomendamos usar **Ollama** (modelos locais, sem custo)."
         )
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔓 Desbloquear", use_container_width=True, disabled=not passphrase):
-                if _unlock_key(passphrase):
+        st.subheader("🔑 Chave da API")
+
+        if _key_is_unlocked():
+            st.success("🔓 Chave desbloqueada")
+            masked = st.session_state.api_key[:6] + "•••" + st.session_state.api_key[-4:]
+            st.caption(f"`{masked}`")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔒 Bloquear", use_container_width=True):
+                    _lock_key()
                     st.rerun()
-                else:
-                    st.error("Senha incorreta!")
-        with col2:
-            if st.button("🗑️ Remover", use_container_width=True):
-                _delete_stored_key()
-                st.rerun()
+            with col2:
+                if st.button("🗑️ Remover", use_container_width=True):
+                    _delete_stored_key()
+                    st.rerun()
 
-    else:
-        st.caption(
-            "Sua chave é criptografada com uma senha mestra "
-            "antes de ser salva. Apenas o blob criptografado "
-            "fica armazenado — em conformidade com a LGPD."
-        )
-        with st.expander("⚙️ Configurar chave", expanded=not _get_active_api_key()):
-            api_key_input = st.text_input(
-                "API Key",
+        elif _key_is_stored():
+            st.info("🔒 Chave criptografada salva")
+            passphrase = st.text_input(
+                "Senha mestra",
                 type="password",
-                placeholder="sk-... ou AIza...",
-                key="api_key_input",
+                placeholder="Digite sua senha para desbloquear",
+                key="unlock_passphrase",
             )
-            save_mode = st.radio(
-                "Modo de armazenamento",
-                ["💾 Salvar criptografada (recomendado)", "⚡ Apenas nesta sessão"],
-                index=0,
-                key="save_mode",
-            )
-            if save_mode.startswith("💾"):
-                master_pass = st.text_input(
-                    "Senha mestra",
-                    type="password",
-                    placeholder="Crie uma senha forte",
-                    key="master_pass",
-                )
-                if st.button(
-                    "💾 Salvar chave criptografada",
-                    use_container_width=True,
-                    disabled=not (api_key_input and master_pass),
-                ):
-                    if len(master_pass) < 4:
-                        st.error("A senha mestra deve ter pelo menos 4 caracteres.")
-                    else:
-                        _save_key(api_key_input, master_pass)
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔓 Desbloquear", use_container_width=True, disabled=not passphrase):
+                    if _unlock_key(passphrase):
                         st.rerun()
-            else:
-                if st.button(
-                    "⚡ Usar nesta sessão",
-                    use_container_width=True,
-                    disabled=not api_key_input,
-                ):
-                    st.session_state.api_key = api_key_input
+                    else:
+                        st.error("Senha incorreta!")
+            with col2:
+                if st.button("🗑️ Remover", use_container_width=True):
+                    _delete_stored_key()
                     st.rerun()
 
+        else:
+            st.caption(
+                "Sua chave é criptografada com uma senha mestra "
+                "antes de ser salva. Apenas o blob criptografado "
+                "fica armazenado — em conformidade com a LGPD."
+            )
+            with st.expander("⚙️ Configurar chave", expanded=not _get_active_api_key()):
+                api_key_input = st.text_input(
+                    "API Key",
+                    type="password",
+                    placeholder="sk-... ou AIza...",
+                    key="api_key_input",
+                )
+                save_mode = st.radio(
+                    "Modo de armazenamento",
+                    ["💾 Salvar criptografada (recomendado)", "⚡ Apenas nesta sessão"],
+                    index=0,
+                    key="save_mode",
+                )
+                if save_mode.startswith("💾"):
+                    master_pass = st.text_input(
+                        "Senha mestra",
+                        type="password",
+                        placeholder="Crie uma senha forte",
+                        key="master_pass",
+                    )
+                    if st.button(
+                        "💾 Salvar chave criptografada",
+                        use_container_width=True,
+                        disabled=not (api_key_input and master_pass),
+                    ):
+                        if len(master_pass) < 4:
+                            st.error("A senha mestra deve ter pelo menos 4 caracteres.")
+                        else:
+                            _save_key(api_key_input, master_pass)
+                            st.rerun()
+                else:
+                    if st.button(
+                        "⚡ Usar nesta sessão",
+                        use_container_width=True,
+                        disabled=not api_key_input,
+                    ):
+                        st.session_state.api_key = api_key_input
+                        st.rerun()
+
+    # ── Model selector ──
     st.divider()
 
-    provider_name = st.selectbox("🤖 Provider", ["gemini"], disabled=True)
-    model_options = AVAILABLE_MODELS + ["✏️ Outro (digite abaixo)"]
-    model_choice = st.selectbox("📊 Modelo", model_options, index=0)
+    if provider_name == "ollama":
+        _ollama_models = _get_ollama_models()
+        if _ollama_models:
+            model_options = _ollama_models + ["✏️ Outro (digite abaixo)"]
+            default_idx = 0
+        else:
+            model_options = ["Nenhum modelo detectado", "✏️ Outro (digite abaixo)"]
+            default_idx = 1
+            st.warning("Ollama não detectado. Certifique-se de que está rodando (`ollama serve`).")
+    else:
+        model_options = [f"{m}  ({GEMINI_LABELS.get(m, '')})" for m in GEMINI_MODELS] + ["✏️ Outro (digite abaixo)"]
+        default_idx = 0
+
+    model_choice = st.selectbox("📊 Modelo", model_options, index=default_idx)
     if model_choice == "✏️ Outro (digite abaixo)":
         model_name = st.text_input(
             "Nome do modelo",
-            placeholder="Ex: gemini-3-flash-preview",
+            placeholder="Ex: llama3 ou gemini-3-flash-preview",
             key="custom_model",
         )
+    elif model_choice == "Nenhum modelo detectado":
+        model_name = st.text_input(
+            "Nome do modelo",
+            placeholder="llama3",
+            key="custom_model2",
+        )
     else:
-        model_name = model_choice
+        model_name = model_choice.split("  ")[0]
 
     uploaded_files = st.file_uploader(
         "📂 Upload JSON(s)",
@@ -443,7 +487,7 @@ with st.sidebar:
         placeholder="Ex: Configuração do Marten Outbox",
     )
 
-    can_process = bool(_get_active_api_key() and uploaded_files)
+    can_process = uploaded_files and (provider_name == "ollama" or _get_active_api_key())
     process_btn = st.button(
         "🔍 Gerar Resumo",
         type="primary",
@@ -451,8 +495,10 @@ with st.sidebar:
         use_container_width=True,
     )
 
-    if uploaded_files and not _get_active_api_key():
-        st.warning("Configure uma chave de API para continuar.")
+    if uploaded_files and provider_name == "gemini" and not _get_active_api_key():
+        st.warning("Configure uma chave de API para usar o Gemini.")
+    if uploaded_files and provider_name == "ollama" and not model_name:
+        st.warning("Selecione ou digite um modelo Ollama.")
 
     st.divider()
 
@@ -497,7 +543,10 @@ for msg in st.session_state.messages:
 
 if process_btn and uploaded_files:
     try:
-        provider = GeminiProvider(model=model_name, api_key=_get_active_api_key())
+        if provider_name == "ollama":
+            provider = OllamaProvider(model=model_name)
+        else:
+            provider = GeminiProvider(model=model_name, api_key=_get_active_api_key())
         conversation, filenames = _parse_all_files(uploaded_files)
         _handle_process(provider, conversation, filenames, model_name, session_title)
         st.rerun()
