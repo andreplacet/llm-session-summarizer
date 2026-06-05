@@ -3,7 +3,7 @@ import streamlit as st
 st.set_page_config(
     page_title="LLM Session Summarizer",
     page_icon="🔬",
-    layout="centered",
+    layout="wide",
     initial_sidebar_state="collapsed",
 )
 

@@ -68,13 +68,15 @@ def _apply_theme(dark: bool) -> None:
     }}
     .main .block-container {{
         color: {fg};
+        max-width: 95% !important;
+        padding: 2rem 3rem 2rem 3rem;
     }}
 
     /* ── Text defaults ── */
-    .stMarkdown, .stMarkdown *, .st-emotion-cache-*, [data-testid="stMarkdownContainer"] * {{
+    .stMarkdown, .stMarkdown *, [data-testid="stMarkdownContainer"] * {{
         color: {fg} !important;
     }}
-    h1, h2, h3, h4, h5, h6, p, li, .st-emotion-cache-0 {{
+    h1, h2, h3, h4, h5, h6, p, li {{
         color: {fg} !important;
     }}
 
@@ -83,9 +85,6 @@ def _apply_theme(dark: bool) -> None:
         background-color: {sbg};
     }}
     [data-testid="stSidebar"] * {{
-        color: {fg} !important;
-    }}
-    [data-testid="stSidebar"] label, [data-testid="stSidebar"] .st-emotion-cache-1qg05tj {{
         color: {fg} !important;
     }}
 
@@ -102,8 +101,39 @@ def _apply_theme(dark: bool) -> None:
     [data-testid="stChatMessage"] {{
         background-color: {sbg} !important;
         border: 1px solid {border} !important;
-        border-radius: 12px;
-        padding: 12px 16px;
+        border-radius: 14px;
+        padding: 20px 24px;
+        margin-bottom: 8px;
+    }}
+
+    /* ── Markdown inside chat ── */
+    [data-testid="stChatMessage"] h2 {{
+        margin-top: 24px;
+        margin-bottom: 12px;
+    }}
+    [data-testid="stChatMessage"] h3 {{
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }}
+    [data-testid="stChatMessage"] p {{
+        margin-bottom: 12px;
+        line-height: 1.7;
+    }}
+    [data-testid="stChatMessage"] ul, [data-testid="stChatMessage"] ol {{
+        margin-bottom: 16px;
+        padding-left: 24px;
+    }}
+    [data-testid="stChatMessage"] li {{
+        margin-bottom: 6px;
+    }}
+
+    /* ── Action buttons area ── */
+    [data-testid="stChatMessage"] .stButton,
+    [data-testid="stChatMessage"] .stDownloadButton {{
+        margin-top: 16px;
+    }}
+    [data-testid="stChatMessage"] .stTextInput {{
+        margin-top: 16px;
     }}
 
     /* ── Code blocks ── */
@@ -117,7 +147,8 @@ def _apply_theme(dark: bool) -> None:
         background-color: {code_bg} !important;
         border: 1px solid {border} !important;
         border-radius: 8px;
-        padding: 12px;
+        padding: 16px;
+        margin: 12px 0;
     }}
 
     /* ── Inputs ── */
@@ -132,6 +163,7 @@ def _apply_theme(dark: bool) -> None:
         background-color: {sbg} !important;
         color: {fg} !important;
         border: 1px solid {border} !important;
+        padding: 8px 16px;
     }}
     .stButton > button[kind="primary"] {{
         background-color: {accent} !important;
