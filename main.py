@@ -35,21 +35,130 @@ st.set_page_config(page_title="LLM Session Summarizer", page_icon="🔬", layout
 
 
 def _apply_theme(dark: bool) -> None:
-    bg = "#0e1117" if dark else "#ffffff"
-    fg = "#e0e0e0" if dark else "#1a1a1a"
-    sbg = "#1a1d23" if dark else "#f0f0f5"
+    if dark:
+        bg = "#0e1117"
+        sbg = "#1a1d23"
+        fg = "#e0e0e0"
+        fg_dim = "#a0a0a0"
+        border = "#2e2e3a"
+        accent = "#4285f4"
+        code_bg = "#1e1e2e"
+        code_fg = "#cdd6f4"
+        input_bg = "#262730"
+        user_bubble = "#1a3a5c"
+        assistant_bubble = "#1a1d23"
+    else:
+        bg = "#fafafa"
+        sbg = "#f0f0f5"
+        fg = "#1a1a2e"
+        fg_dim = "#555555"
+        border = "#d0d0d5"
+        accent = "#1a73e8"
+        code_bg = "#f4f4f8"
+        code_fg = "#1a1a2e"
+        input_bg = "#ffffff"
+        user_bubble = "#e3f0ff"
+        assistant_bubble = "#f0f0f5"
+
     st.markdown(
         f"""
     <style>
-    .stApp {{
+    /* Base */
+    .stApp, .main .block-container {{
         background-color: {bg};
+        color: {fg};
     }}
-    .stChatMessage {{
+    h1, h2, h3, h4, h5, h6, p, li, label, span, div {{
+        color: {fg} !important;
+    }}
+    .stMarkdown {{
+        color: {fg};
+    }}
+
+    /* Sidebar */
+    [data-testid="stSidebar"] {{
+        background-color: {sbg};
+        border-right: 1px solid {border};
+    }}
+    [data-testid="stSidebar"] * {{
+        color: {fg} !important;
+    }}
+
+    /* Chat messages */
+    [data-testid="stChatMessage"] {{
+        background-color: {sbg} !important;
+        border: 1px solid {border} !important;
+        border-radius: 12px;
+        padding: 12px 16px;
+    }}
+    [data-testid="stChatMessage"] [data-testid="chatAvatarIcon-user"] {{
+        background-color: {accent} !important;
+    }}
+    [data-testid="stChatMessage"] [data-testid="chatAvatarIcon-assistant"] {{
+        background-color: #34a853 !important;
+    }}
+
+    /* Code blocks inside chat */
+    .stChatMessage code {{
+        background-color: {code_bg} !important;
+        color: {code_fg} !important;
+        padding: 2px 6px;
+        border-radius: 4px;
+    }}
+    .stChatMessage pre {{
+        background-color: {code_bg} !important;
+        border: 1px solid {border};
+        border-radius: 8px;
+        padding: 12px;
+    }}
+
+    /* Inputs and buttons */
+    .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {{
+        background-color: {input_bg} !important;
+        color: {fg} !important;
+        border-color: {border} !important;
+    }}
+    .stButton > button {{
+        color: {fg} !important;
+        border-color: {border} !important;
+    }}
+    .stButton > button[kind="primary"] {{
+        background-color: {accent} !important;
+        color: #ffffff !important;
+    }}
+
+    /* File uploader */
+    div[data-testid="stFileUploaderDropzone"] {{
+        background-color: {sbg};
+        border-color: {border};
+    }}
+
+    /* Dividers */
+    hr {{
+        border-color: {border} !important;
+    }}
+
+    /* Download button */
+    .stDownloadButton > button {{
+        background-color: {sbg} !important;
+        color: {fg} !important;
+        border: 1px solid {border} !important;
+    }}
+    .stDownloadButton > button:hover {{
+        border-color: {accent} !important;
+        color: {accent} !important;
+    }}
+
+    /* Expand/Collapse */
+    .streamlit-expanderHeader {{
         background-color: {sbg} !important;
         color: {fg} !important;
     }}
-    div[data-testid="stFileUploaderDropzone"] {{
-        background-color: {sbg};
+
+    /* Warning/info boxes */
+    .stAlert {{
+        background-color: {sbg} !important;
+        border-color: {border} !important;
     }}
     </style>
     """,
@@ -537,9 +646,38 @@ st.title("Resumo da Conversa")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-for msg in st.session_state.messages:
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "message_contexts" not in st.session_state:
+    st.session_state.message_contexts = {}
+
+for idx, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+
+    if msg["role"] == "assistant" and msg["content"] and not msg["content"].startswith("❌"):
+        sanitized = msg["content"].replace("`", "").replace("#", "").replace("*", "").strip()
+        filename = (sanitized[:40] + "...") if len(sanitized) > 40 else sanitized
+        filename = (filename or "resumo") + ".md"
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.download_button(
+                "📥 Baixar .md",
+                data=msg["content"],
+                file_name=filename,
+                mime="text/markdown",
+                key=f"dl_{idx}",
+                use_container_width=True,
+            )
+        with col2:
+            with st.expander("💬 Contexto da sessão"):
+                st.text_area(
+                    "Qual CLI/chat, projeto e stack foram usados nesta conversa?",
+                    key=f"ctx_{idx}",
+                    placeholder="Ex: Gemini CLI, projeto Adonis (.NET + Marten)...",
+                    label_visibility="collapsed",
+                )
 
 if process_btn and uploaded_files:
     try:
