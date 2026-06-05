@@ -15,7 +15,7 @@ from src.crypto import encrypt, decrypt
 from src.models import ParsedConversation, Message
 from src.parsers.gemini_cli import GeminiCLIParser
 from src.prompts.templates import SYSTEM_PROMPT
-from src.providers.gemini import AVAILABLE_MODELS, GeminiProvider
+from src.providers.gemini import AVAILABLE_MODELS, DEFAULT_MODEL, GeminiProvider
 from src.database import Database
 
 load_dotenv()
@@ -420,7 +420,16 @@ with st.sidebar:
     st.divider()
 
     provider_name = st.selectbox("🤖 Provider", ["gemini"], disabled=True)
-    model_name = st.selectbox("📊 Modelo", AVAILABLE_MODELS, index=0)
+    model_options = AVAILABLE_MODELS + ["✏️ Outro (digite abaixo)"]
+    model_choice = st.selectbox("📊 Modelo", model_options, index=0)
+    if model_choice == "✏️ Outro (digite abaixo)":
+        model_name = st.text_input(
+            "Nome do modelo",
+            placeholder="Ex: gemini-3-flash-preview",
+            key="custom_model",
+        )
+    else:
+        model_name = model_choice
 
     uploaded_files = st.file_uploader(
         "📂 Upload JSON(s)",

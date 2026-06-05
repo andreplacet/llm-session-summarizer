@@ -6,16 +6,25 @@ from google import genai
 from src.providers.base import AbstractProvider
 
 AVAILABLE_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.5-pro",
+    "gemini-3-flash-preview",
+    "gemini-3.1-pro-preview",
+    "gemini-3.1-flash-preview",
 ]
+
+MODEL_ALIASES = {
+    "flash": "gemini-3-flash-preview",
+    "pro": "gemini-3.1-pro-preview",
+    "flash-3.1": "gemini-3.1-flash-preview",
+}
+
+DEFAULT_MODEL = "gemini-3-flash-preview"
 
 
 class GeminiProvider(AbstractProvider):
 
     def __init__(
         self,
-        model: str = "gemini-2.5-flash",
+        model: str = DEFAULT_MODEL,
         api_key: Optional[str] = None,
         temperature: float = 0.3,
     ):
