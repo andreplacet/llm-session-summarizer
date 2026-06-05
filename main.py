@@ -250,6 +250,12 @@ def _get_ollama_models() -> list[str]:
     return asyncio.run(OllamaProvider.list_models())
 
 
+def _make_provider(provider_name: str, model_name: str):
+    if provider_name == "ollama":
+        return OllamaProvider(model=model_name)
+    return GeminiProvider(model=model_name, api_key=_get_active_api_key())
+
+
 # ---------------------------------------------------------------------------
 # Prompt builders
 # ---------------------------------------------------------------------------
@@ -648,22 +654,75 @@ st.title("Resumo da Conversa")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# Handle prompt generation request
+if st.session_state.get("prompt_to_generate") is not None:
+    _gen_idx = st.session_state["prompt_to_generate"]
+    if _gen_idx < len(st.session_state.messages):
+        _summary = st.session_state.messages[_gen_idx]["content"]
+        _source = st.session_state.get(f"src_{_gen_idx}", "")
+        _provider = _make_provider(provider_name, model_name)
+
+        _prompt_template = f"""Com base no resumo abaixo de uma conversa entre desenvolvedor e IA,
+gere um PROMPT DE CONTINUAÇÃO otimizado para uso em CLIs de IA (Gemini CLI, OpenCode, etc.).
+
+O prompt deve seguir esta estrutura em markdown:
+
+- **Contexto**: resumo do que já foi feito (1 parágrafo)
+- **Objetivo**: o que fazer a seguir, claro e específico
+- **Restrições**: stack, linguagem, padrões, estilo (se mencionado)
+- **Tarefas**: lista de passos concretos e acionáveis
+
+{f'**Ferramenta alvo**: {_source}' if _source else ''}
+
+Resumo da conversa:
+{{_summary}}
+
+Gere APENAS o prompt final (sem explicações), formatado em markdown.
+O prompt deve ser autocontido — o dev deve conseguir copiá-lo e colar
+em qualquer CLI de IA para continuar o trabalho imediatamente."""
+
+        _prompt_text = _prompt_template.replace("{_summary}", _summary)
+
+        with st.chat_message("assistant"):
+            with st.spinner("🤖 Gerando prompt de continuidade..."):
+                try:
+                    response = st.write_stream(
+                        _async_iter_to_sync(
+                            _provider,
+                            "Você é um gerador de prompts para IAs. "
+                            "Seu trabalho é criar prompts estruturados, acionáveis e autocontidos. "
+                            "Escreva em português do Brasil.",
+                            _prompt_text,
+                        )
+                    )
+                    prefix = f"📋 *Prompt gerado a partir do resumo acima*"
+                    if _source:
+                        prefix += f" | Fonte: {_source}"
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": response, "is_prompt": True}
+                    )
+                except Exception as exc:
+                    st.error(f"❌ Erro ao gerar prompt: {exc}")
+
+    st.session_state["prompt_to_generate"] = None
+    st.rerun()
 
 for idx, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
     if msg["role"] == "assistant" and msg["content"] and not msg["content"].startswith("❌"):
+        is_prompt = msg.get("is_prompt", False)
+        label = "📥 Baixar prompt .md" if is_prompt else "📥 Baixar resumo .md"
+
         sanitized = msg["content"].replace("`", "").replace("#", "").replace("*", "").strip()
         filename = (sanitized[:40] + "...") if len(sanitized) > 40 else sanitized
-        filename = (filename or "resumo") + ".md"
+        filename = (filename or ("prompt" if is_prompt else "resumo")) + ".md"
 
         col1, col2 = st.columns([1, 2])
         with col1:
             st.download_button(
-                "📥 Baixar .md",
+                label,
                 data=msg["content"],
                 file_name=filename,
                 mime="text/markdown",
@@ -671,12 +730,20 @@ for idx, msg in enumerate(st.session_state.messages):
                 use_container_width=True,
             )
         with col2:
-            st.text_input(
-                "📋 Fonte da conversa (opcional)",
-                key=f"src_{idx}",
-                placeholder="Ex: Gemini CLI, OpenCode, VS Code chat...",
-                label_visibility="collapsed",
-            )
+            if not is_prompt:
+                st.text_input(
+                    "📋 Fonte da conversa (opcional)",
+                    key=f"src_{idx}",
+                    placeholder="Ex: Gemini CLI, OpenCode, VS Code chat...",
+                    label_visibility="collapsed",
+                )
+            if is_prompt:
+                st.caption("✅ Prompt de continuidade gerado")
+
+    if msg["role"] == "assistant" and not msg.get("is_prompt") and msg["content"] and not msg["content"].startswith("❌"):
+        if st.button("🤖 Gerar prompt de continuidade", key=f"gen_{idx}", use_container_width=True):
+            st.session_state["prompt_to_generate"] = idx
+            st.rerun()
 
 if process_btn and uploaded_files:
     try:
