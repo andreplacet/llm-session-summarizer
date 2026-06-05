@@ -11,6 +11,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from src.chunker import CHUNK_SIZE, summarize_conversation
+from src.crypto import encrypt, decrypt
 from src.models import ParsedConversation, Message
 from src.parsers.gemini_cli import GeminiCLIParser
 from src.prompts.templates import SYSTEM_PROMPT
@@ -84,6 +85,52 @@ def _async_iter_to_sync(provider, system_prompt: str, user_prompt: str) -> Itera
             raise value
         else:
             yield value
+
+
+# ---------------------------------------------------------------------------
+# Key management (crypto + session state)
+# ---------------------------------------------------------------------------
+KEY_PROVIDER = "gemini"
+
+DB = Database()
+
+
+def _key_is_unlocked() -> bool:
+    return bool(st.session_state.get("api_key"))
+
+
+def _key_is_stored() -> bool:
+    return DB.has_encrypted_key(KEY_PROVIDER)
+
+
+def _unlock_key(passphrase: str) -> bool:
+    encrypted = DB.get_encrypted_key(KEY_PROVIDER)
+    if not encrypted:
+        return False
+    try:
+        st.session_state.api_key = decrypt(encrypted, passphrase)
+        return True
+    except ValueError:
+        return False
+
+
+def _lock_key() -> None:
+    st.session_state.api_key = None
+
+
+def _save_key(api_key: str, passphrase: str) -> None:
+    encrypted = encrypt(api_key, passphrase)
+    DB.save_encrypted_key(KEY_PROVIDER, encrypted)
+    st.session_state.api_key = api_key
+
+
+def _delete_stored_key() -> None:
+    DB.delete_encrypted_key(KEY_PROVIDER)
+    st.session_state.api_key = None
+
+
+def _get_active_api_key() -> str | None:
+    return st.session_state.get("api_key") or os.getenv("GEMINI_API_KEY")
 
 
 # ---------------------------------------------------------------------------
@@ -261,8 +308,7 @@ def _handle_process(
 
     # Persist to DB
     sid = str(uuid.uuid4())
-    db = Database()
-    db.save_session(
+    DB.save_session(
         id=sid,
         title=session_title or filenames[0],
         source=conversation.metadata.get("source", "unknown"),
@@ -270,7 +316,7 @@ def _handle_process(
         filenames=", ".join(filenames),
         message_count=msg_count,
     )
-    db.save_summary(
+    DB.save_summary(
         id=str(uuid.uuid4()),
         session_id=sid,
         content=response,
@@ -289,6 +335,90 @@ with st.sidebar:
 
     st.divider()
 
+    # ── Key management ──
+    st.subheader("🔑 Chave da API")
+
+    if _key_is_unlocked():
+        st.success("🔓 Chave desbloqueada")
+        masked = st.session_state.api_key[:6] + "•••" + st.session_state.api_key[-4:]
+        st.caption(f"`{masked}`")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔒 Bloquear", use_container_width=True):
+                _lock_key()
+                st.rerun()
+        with col2:
+            if st.button("🗑️ Remover", use_container_width=True):
+                _delete_stored_key()
+                st.rerun()
+
+    elif _key_is_stored():
+        st.info("🔒 Chave criptografada salva")
+        passphrase = st.text_input(
+            "Senha mestra",
+            type="password",
+            placeholder="Digite sua senha para desbloquear",
+            key="unlock_passphrase",
+        )
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔓 Desbloquear", use_container_width=True, disabled=not passphrase):
+                if _unlock_key(passphrase):
+                    st.rerun()
+                else:
+                    st.error("Senha incorreta!")
+        with col2:
+            if st.button("🗑️ Remover", use_container_width=True):
+                _delete_stored_key()
+                st.rerun()
+
+    else:
+        st.caption(
+            "Sua chave é criptografada com uma senha mestra "
+            "antes de ser salva. Apenas o blob criptografado "
+            "fica armazenado — em conformidade com a LGPD."
+        )
+        with st.expander("⚙️ Configurar chave", expanded=not _get_active_api_key()):
+            api_key_input = st.text_input(
+                "API Key",
+                type="password",
+                placeholder="sk-... ou AIza...",
+                key="api_key_input",
+            )
+            save_mode = st.radio(
+                "Modo de armazenamento",
+                ["💾 Salvar criptografada (recomendado)", "⚡ Apenas nesta sessão"],
+                index=0,
+                key="save_mode",
+            )
+            if save_mode.startswith("💾"):
+                master_pass = st.text_input(
+                    "Senha mestra",
+                    type="password",
+                    placeholder="Crie uma senha forte",
+                    key="master_pass",
+                )
+                if st.button(
+                    "💾 Salvar chave criptografada",
+                    use_container_width=True,
+                    disabled=not (api_key_input and master_pass),
+                ):
+                    if len(master_pass) < 4:
+                        st.error("A senha mestra deve ter pelo menos 4 caracteres.")
+                    else:
+                        _save_key(api_key_input, master_pass)
+                        st.rerun()
+            else:
+                if st.button(
+                    "⚡ Usar nesta sessão",
+                    use_container_width=True,
+                    disabled=not api_key_input,
+                ):
+                    st.session_state.api_key = api_key_input
+                    st.rerun()
+
+    st.divider()
+
     provider_name = st.selectbox("🤖 Provider", ["gemini"], disabled=True)
     model_name = st.selectbox("📊 Modelo", AVAILABLE_MODELS, index=0)
 
@@ -304,18 +434,21 @@ with st.sidebar:
         placeholder="Ex: Configuração do Marten Outbox",
     )
 
+    can_process = bool(_get_active_api_key() and uploaded_files)
     process_btn = st.button(
         "🔍 Gerar Resumo",
         type="primary",
-        disabled=not uploaded_files,
+        disabled=not can_process,
         use_container_width=True,
     )
+
+    if uploaded_files and not _get_active_api_key():
+        st.warning("Configure uma chave de API para continuar.")
 
     st.divider()
 
     st.subheader("📜 Histórico")
-    db = Database()
-    for row in db.get_all_sessions():
+    for row in DB.get_all_sessions():
         c1, c2 = st.columns([4, 1])
         with c1:
             label = row["title"]
@@ -324,7 +457,7 @@ with st.sidebar:
             if st.button(
                 label, key=f"hist_{row['id']}", use_container_width=True
             ):
-                content = db.get_summary(row["id"])
+                content = DB.get_summary(row["id"])
                 if content:
                     st.session_state.messages = [
                         {
@@ -338,7 +471,7 @@ with st.sidebar:
                     st.rerun()
         with c2:
             if st.button("🗑️", key=f"del_{row['id']}"):
-                db.delete_session(row["id"])
+                DB.delete_session(row["id"])
                 st.rerun()
 
 # ---------------------------------------------------------------------------
@@ -355,7 +488,7 @@ for msg in st.session_state.messages:
 
 if process_btn and uploaded_files:
     try:
-        provider = GeminiProvider(model=model_name)
+        provider = GeminiProvider(model=model_name, api_key=_get_active_api_key())
         conversation, filenames = _parse_all_files(uploaded_files)
         _handle_process(provider, conversation, filenames, model_name, session_title)
         st.rerun()

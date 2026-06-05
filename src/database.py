@@ -41,6 +41,13 @@ class Database:
                     model_used TEXT NOT NULL,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
+
+                CREATE TABLE IF NOT EXISTS provider_keys (
+                    provider TEXT PRIMARY KEY,
+                    encrypted_key TEXT NOT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
             """)
 
     def save_session(
@@ -84,3 +91,28 @@ class Database:
     def delete_session(self, session_id: str):
         with self._connect() as conn:
             conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+
+    # --- Key storage ---
+
+    def save_encrypted_key(self, provider: str, encrypted_key: str):
+        with self._connect() as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO provider_keys (provider, encrypted_key, created_at, updated_at)
+                   VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+                (provider, encrypted_key),
+            )
+
+    def get_encrypted_key(self, provider: str) -> str | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT encrypted_key FROM provider_keys WHERE provider = ?",
+                (provider,),
+            ).fetchone()
+            return row["encrypted_key"] if row else None
+
+    def has_encrypted_key(self, provider: str) -> bool:
+        return self.get_encrypted_key(provider) is not None
+
+    def delete_encrypted_key(self, provider: str):
+        with self._connect() as conn:
+            conn.execute("DELETE FROM provider_keys WHERE provider = ?", (provider,))

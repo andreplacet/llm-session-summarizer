@@ -13,7 +13,46 @@
 - Dark mode
 - Providers extensíveis (Gemini hoje, OpenAI/Claude amanhã)
 
-## Setup
+## 🔐 Segurança e LGPD
+
+### Modelo de criptografia de chaves
+
+Para viabilizar deploy web em conformidade com a LGPD, a chave da API
+**nunca é armazenada em texto plano**. O modelo segue o padrão de carteiras
+digitais (Metamask, etc.):
+
+```
+Usuário digita API Key + cria uma "senha mestra"
+    ↓
+Senha mestra → PBKDF2 (600k iterações) → chave AES-128
+    ↓
+API Key é criptografada com Fernet (AES-CBC + HMAC)
+    ↓
+Apenas o blob criptografado (salt + ciphertext) é salvo no SQLite
+    ↓
+Na próxima sessão: usuário digita senha mestra → descriptografa
+```
+
+**Garantias:**
+- O servidor NUNCA vê a chave em texto plano (só recebe o blob criptografado)
+- Se o banco de dados vazar, o atacante só obtém blobs ilegíveis sem a senha
+- Senha mestra NUNCA é armazenada (nem em hash)
+- Modo "apenas nesta sessão": chave existe só em `st.session_state`, perdida ao fechar
+
+**Conformidade LGPD:**
+- Dado pessoal (API key) é armazenado com criptografia forte (art. 46)
+- Usuário pode remover a chave a qualquer momento (direito à eliminação, art. 18)
+- Modo sessão efêmera implementa "right to be forgotten" por design
+
+### Modos de uso
+
+| Modo | Persistência | Segurança |
+|---|---|---|
+| 💾 Salvar criptografada | SQLite (blob) | Alta — requer senha mestra |
+| ⚡ Apenas nesta sessão | `st.session_state` | Máxima — some ao fechar |
+| `.env` (fallback) | Arquivo local | Baixa — só para dev local |
+
+### Setup
 
 ```bash
 cd ~/dev/personal/python/llm-session-summarizer
@@ -24,13 +63,15 @@ python -m venv .venv && source .venv/bin/activate
 # Instalar dependências
 pip install -r requirements.txt
 
-# Configurar API key
+# Desenvolvimento local (opcional)
 cp .env.example .env
 # Editar .env com sua GEMINI_API_KEY
 
 # Rodar
 streamlit run main.py
 ```
+
+> Para uso local com `.env`, não configure chave na UI. O app usa `.env` como fallback automaticamente.
 
 ## Estrutura
 
@@ -48,6 +89,7 @@ streamlit run main.py
 │   └── decisions/             # ADRs (decisões de arquitetura)
 └── src/
     ├── models.py              # Dataclasses (Message, ParsedConversation)
+    ├── crypto.py              # Criptografia (PBKDF2 + Fernet AES-128)
     ├── parsers/
     │   ├── base.py            # AbstractParser (interface)
     │   └── gemini_cli.py      # Parser para formato Gemini CLI
@@ -57,7 +99,7 @@ streamlit run main.py
     │   ├── base.py            # AbstractProvider (interface)
     │   └── gemini.py          # Provider Gemini (google-genai)
     ├── chunker.py             # Map-reduce para conversas longas
-    └── database.py            # SQLite CRUD
+    └── database.py            # SQLite CRUD (sessões + chaves criptografadas)
 ```
 
 ## Formato de entrada suportado
