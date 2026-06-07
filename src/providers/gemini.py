@@ -12,7 +12,7 @@ AVAILABLE_MODELS = [
 ]
 
 MODEL_LABELS = {
-    "gemini-2.0-flash": "🆓 Grátis (free tier)",
+    "gemini-2.0-flash": "⚡ Rápido",
     "gemini-3-flash-preview": "💰 Pago (preview)",
     "gemini-3.1-pro-preview": "💰 Pago (preview)",
 }
