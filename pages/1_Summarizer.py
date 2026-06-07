@@ -274,6 +274,9 @@ PROVIDER_ENV_VARS = {
 
 DB = Database()
 
+if "session_key" not in st.session_state:
+    st.session_state["session_key"] = str(uuid.uuid4())
+
 
 def _key_is_unlocked(provider_name: str) -> bool:
     return bool(st.session_state.get(f"api_key_{provider_name}"))
@@ -570,6 +573,7 @@ def _handle_process(
         provider=model_name,
         filenames=", ".join(filenames),
         message_count=msg_count,
+        session_key=st.session_state.get("session_key", ""),
     )
     DB.save_summary(
         id=str(uuid.uuid4()),
@@ -823,7 +827,7 @@ with st.sidebar:
     st.divider()
 
     st.subheader("📜 Histórico")
-    for row in DB.get_all_sessions():
+    for row in DB.get_all_sessions(session_key=st.session_state.get("session_key", "")):
         c1, c2 = st.columns([4, 1])
         with c1:
             label = row["title"]

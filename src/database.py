@@ -56,6 +56,12 @@ class Database:
             except sqlite3.OperationalError:
                 pass  # column already exists
 
+            # Migration: add session_key column for per-session history isolation
+            try:
+                conn.execute("ALTER TABLE sessions ADD COLUMN session_key TEXT NOT NULL DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass  # column already exists
+
     def save_session(
         self,
         id: str,
@@ -64,12 +70,13 @@ class Database:
         provider: str,
         filenames: str,
         message_count: int,
+        session_key: str = "",
     ):
         with self._connect() as conn:
             conn.execute(
-                """INSERT OR REPLACE INTO sessions (id, title, source, provider, filenames, message_count, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (id, title, source, provider, filenames, message_count, datetime.utcnow()),
+                """INSERT OR REPLACE INTO sessions (id, title, source, provider, filenames, message_count, session_key, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (id, title, source, provider, filenames, message_count, session_key, datetime.utcnow()),
             )
 
     def save_summary(self, id: str, session_id: str, content: str, model_used: str, type: str = "summary"):
@@ -80,10 +87,11 @@ class Database:
                 (id, session_id, content, model_used, type, datetime.utcnow()),
             )
 
-    def get_all_sessions(self) -> list[sqlite3.Row]:
+    def get_all_sessions(self, session_key: str = "") -> list[sqlite3.Row]:
         with self._connect() as conn:
             return conn.execute(
-                "SELECT * FROM sessions ORDER BY created_at DESC"
+                "SELECT * FROM sessions WHERE session_key = ? ORDER BY created_at DESC",
+                (session_key,),
             ).fetchall()
 
     def get_summary(self, session_id: str) -> Optional[str]:
