@@ -1,11 +1,16 @@
 import asyncio
 import json
 import os
+import sys
 import uuid
 from datetime import datetime
+from pathlib import Path
 from queue import Queue
 from threading import Thread
 from typing import Iterator
+
+# Ensure repo root is on sys.path (needed for Streamlit Cloud deploy)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import streamlit as st
 from dotenv import load_dotenv
