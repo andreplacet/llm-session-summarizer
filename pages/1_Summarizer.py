@@ -877,6 +877,11 @@ with st.sidebar:
     else:
         st.caption("Nenhum resumo gerado nesta sessão.")
 
+    st.caption(
+        "🕐 O histórico expira automaticamente após 30 dias. "
+        "Faça download dos resumos que quiser guardar antes desse prazo."
+    )
+
 # ---------------------------------------------------------------------------
 # UI — Main chat area
 # ---------------------------------------------------------------------------

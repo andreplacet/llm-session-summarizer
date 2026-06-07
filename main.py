@@ -31,9 +31,10 @@ with col:
     st.page_link("pages/1_Summarizer.py", label="Abrir Summarizer", icon=":material/arrow_forward:")
 
     st.markdown("""
-    Faça upload de arquivos `.json` (Gemini CLI) ou `.md` (OpenCode) das suas sessões com LLMs
-    e receba um resumo didático em **6 seções** — com streaming em tempo real,
-    prompts de continuidade, downloads em markdown e **formato TOON para economia de tokens**.
+    Faça upload de arquivos `.json` (Gemini CLI) ou `.md` (OpenCode) e escolha
+    entre **4 provedores** — Ollama, Gemini, OpenAI e Anthropic — para gerar
+    resumos estruturados em **6 seções** com streaming, downloads em markdown e
+    **formato TOON para economia de tokens**.
     """)
 
     st.divider()
@@ -42,7 +43,7 @@ with col:
 
     st.page_link("pages/1_Summarizer.py", label="1. Abra o Summarizer", icon=":material/arrow_forward:")
     st.markdown("""
-    2. Selecione o provedor: **Ollama** (local, gratuito) ou **Gemini** (cloud)
+    2. Escolha o provedor: **Ollama**, **Gemini**, **OpenAI** ou **Anthropic**
     3. Escolha o formato do prompt: **Markdown** ou **⚡ TOON** (econômico)
     4. Faça upload de um ou mais arquivos `.json` ou `.md` de conversas
     5. Clique em **Gerar Resumo** e veja o streaming
@@ -56,19 +57,29 @@ with col:
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("""
-        **🦙 Ollama** *(recomendado)*
+        **🦙 Ollama**
         - Modelos locais
-        - Zero custo
-        - Zero API key
+        - Zero custo · Zero API key
         - Privacidade total
+        """)
+        st.markdown("""
+        **🔷 OpenAI**
+        - GPT-5.5 · GPT-5.4 · GPT-5.4 Mini
+        - Requer API key
+        - Fatia premium
         """)
     with col2:
         st.markdown("""
         **🤖 Gemini**
-        - Google AI Studio
+        - 2.0 Flash · 3.x Preview
         - Requer API key
-        - Modelos 3.x preview
-        - ⚠️ Créditos pré-pagos necessários
+        - Créditos pré-pagos
+        """)
+        st.markdown("""
+        **🧠 Anthropic**
+        - Claude Opus 4.8 · Sonnet 4.6 · Haiku 4.5
+        - Requer API key
+        - Contexto de 1M tokens
         """)
 
     st.divider()
@@ -88,18 +99,7 @@ with col:
 
     st.divider()
 
-    st.markdown("### 🔒 Segurança")
-
-    st.markdown("""
-    - Chaves de API criptografadas com **PBKDF2 + Fernet AES-128**
-    - Senha mestra nunca é armazenada
-    - Modo "apenas nesta sessão" disponível
-    - LGPD-compliant: eliminação de dados sob demanda
-    """)
-
-    st.divider()
-
     st.caption(
-        "[GitHub](https://github.com/andreplacet/llm-session-summarizer) · "
-        "Ollama · Gemini AI · Streamlit"
+        "[GitHub](https://github.com/EzuraWrath/llm-session-summarizer) · "
+        "Ollama · Gemini · OpenAI · Anthropic · Streamlit"
     )
