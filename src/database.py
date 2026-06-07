@@ -62,6 +62,15 @@ class Database:
             except sqlite3.OperationalError:
                 pass  # column already exists
 
+            # Table for persistent session tokens (URL-based, survives tab close)
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS session_tokens (
+                    token TEXT PRIMARY KEY,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
     def save_session(
         self,
         id: str,
@@ -105,6 +114,49 @@ class Database:
     def delete_session(self, session_id: str):
         with self._connect() as conn:
             conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+
+    def delete_all_by_session_key(self, session_key: str):
+        with self._connect() as conn:
+            conn.execute("DELETE FROM sessions WHERE session_key = ?", (session_key,))
+
+    def purge_expired_sessions(self, session_key: str, max_age_days: int = 30):
+        with self._connect() as conn:
+            conn.execute(
+                "DELETE FROM sessions WHERE session_key = ? "
+                "AND created_at < datetime('now', ?)",
+                (session_key, f"-{max_age_days} days"),
+            )
+            conn.execute(
+                "DELETE FROM session_tokens WHERE token = ? "
+                "AND created_at < datetime('now', ?)",
+                (session_key, f"-{max_age_days} days"),
+            )
+
+    # --- Session token persistence (URL-based, survives tab close) ---
+
+    def save_session_token(self, token: str):
+        with self._connect() as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO session_tokens (token, created_at, last_seen_at)
+                   VALUES (?, COALESCE((SELECT created_at FROM session_tokens WHERE token = ?), CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)""",
+                (token, token),
+            )
+
+    def touch_session_token(self, token: str):
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE session_tokens SET last_seen_at = CURRENT_TIMESTAMP WHERE token = ?",
+                (token,),
+            )
+
+    def is_valid_token(self, token: str, max_age_days: int = 30) -> bool:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM session_tokens WHERE token = ? "
+                "AND created_at > datetime('now', ?)",
+                (token, f"-{max_age_days} days"),
+            ).fetchone()
+            return row is not None
 
     # --- Key storage ---
 

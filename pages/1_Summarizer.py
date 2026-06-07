@@ -274,8 +274,20 @@ PROVIDER_ENV_VARS = {
 
 DB = Database()
 
+# Persistent session token (via URL query param, survives tab close)
+TOKEN_MAX_AGE = 30  # days
+
 if "session_key" not in st.session_state:
-    st.session_state["session_key"] = str(uuid.uuid4())
+    token = st.query_params.get("s")
+    if token and DB.is_valid_token(token, TOKEN_MAX_AGE):
+        st.session_state["session_key"] = token
+        DB.touch_session_token(token)
+    else:
+        new_token = str(uuid.uuid4())
+        DB.save_session_token(new_token)
+        st.session_state["session_key"] = new_token
+        st.query_params["s"] = new_token
+        st.rerun()
 
 
 def _key_is_unlocked(provider_name: str) -> bool:
@@ -827,31 +839,43 @@ with st.sidebar:
     st.divider()
 
     st.subheader("📜 Histórico")
-    for row in DB.get_all_sessions(session_key=st.session_state.get("session_key", "")):
-        c1, c2 = st.columns([4, 1])
-        with c1:
-            label = row["title"]
-            if len(label) > 40:
-                label = label[:40] + "..."
-            if st.button(
-                label, key=f"hist_{row['id']}", use_container_width=True
-            ):
-                content = DB.get_summary(row["id"])
-                if content:
-                    st.session_state.messages = [
-                        {
-                            "role": "user",
-                            "content": (
-                                f"📂 {row['filenames']} ({row['message_count']} mensagens)"
-                            ),
-                        },
-                        {"role": "assistant", "content": content},
-                    ]
+    # Purge expired sessions before displaying
+    session_key = st.session_state.get("session_key", "")
+    DB.purge_expired_sessions(session_key, TOKEN_MAX_AGE)
+    rows = DB.get_all_sessions(session_key=session_key)
+    if rows:
+        for row in rows:
+            c1, c2 = st.columns([4, 1])
+            with c1:
+                label = row["title"]
+                if len(label) > 40:
+                    label = label[:40] + "..."
+                if st.button(
+                    label, key=f"hist_{row['id']}", use_container_width=True
+                ):
+                    content = DB.get_summary(row["id"])
+                    if content:
+                        st.session_state.messages = [
+                            {
+                                "role": "user",
+                                "content": (
+                                    f"📂 {row['filenames']} ({row['message_count']} mensagens)"
+                                ),
+                            },
+                            {"role": "assistant", "content": content},
+                        ]
+                        st.rerun()
+            with c2:
+                if st.button("🗑️", key=f"del_{row['id']}"):
+                    DB.delete_session(row["id"])
                     st.rerun()
-        with c2:
-            if st.button("🗑️", key=f"del_{row['id']}"):
-                DB.delete_session(row["id"])
-                st.rerun()
+
+    if rows:
+        if st.button("🗑️ Apagar todo o histórico", use_container_width=True, key="clear_all_history"):
+            DB.delete_all_by_session_key(session_key)
+            st.rerun()
+    else:
+        st.caption("Nenhum resumo gerado nesta sessão.")
 
 # ---------------------------------------------------------------------------
 # UI — Main chat area
