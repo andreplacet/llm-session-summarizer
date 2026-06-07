@@ -4,26 +4,34 @@
     "cta": "Open Summarizer",
     "desc": "Upload `.json` (Gemini CLI) or `.md` (OpenCode) files and choose from **4 providers** — Ollama, Gemini, OpenAI and Anthropic — to generate structured summaries in **6 sections** with streaming, markdown downloads and **TOON format for token savings**."
   },
-
   "howto": {
     "title": "How to use",
     "step1": "1. Open the Summarizer",
     "steps": "2. Choose a provider: **Ollama**, **Gemini**, **OpenAI** or **Anthropic**\n3. Choose prompt format: **Markdown** or **⚡ TOON** (token-efficient)\n4. Upload one or more `.json` or `.md` conversation files\n5. Click **Generate Summary** and watch the streaming\n6. Download the `.md` or generate a **continuity prompt**"
   },
-
   "providers": {
     "title": "Providers",
-    "ollama": { "name": "Ollama", "desc": "- Local models\n- Zero cost · Zero API key\n- Full privacy" },
-    "openai": { "name": "OpenAI", "desc": "- GPT-5.5 · GPT-5.4 · GPT-5.4 Mini\n- Requires API key\n- Premium tier" },
-    "gemini": { "name": "Gemini", "desc": "- 2.0 Flash · 3.x Preview\n- Requires API key\n- Prepaid credits" },
-    "anthropic": { "name": "Anthropic", "desc": "- Claude Opus 4.8 · Sonnet 4.6 · Haiku 4.5\n- Requires API key\n- 1M token context" }
+    "ollama": {
+      "name": "Ollama",
+      "desc": "- Local models\n- Zero cost · Zero API key\n- Full privacy"
+    },
+    "openai": {
+      "name": "OpenAI",
+      "desc": "- GPT-5.5 · GPT-5.4 · GPT-5.4 Mini\n- Requires API key\n- Premium tier"
+    },
+    "gemini": {
+      "name": "Gemini",
+      "desc": "- 2.0 Flash · 3.x Preview\n- Requires API key\n- Prepaid credits"
+    },
+    "anthropic": {
+      "name": "Anthropic",
+      "desc": "- Claude Opus 4.8 · Sonnet 4.6 · Haiku 4.5\n- Requires API key\n- 1M token context"
+    }
   },
-
   "toon": {
     "title": "TOON — Token savings",
     "desc": "This project supports **TOON (Token-Oriented Object Notation)**, a compact prompt format that removes emojis, markdown and timestamps — reducing **~10-15% of tokens** per request without changing the conversation content.\n\n- **Markdown**: `### 🔥 Developer _14:30:00_` → more readable for the AI\n- **TOON**: `role:user ts:14:30:00` → more efficient, same result\n- Switch formats in the Summarizer sidebar\n- Token counter visible before and during generation"
   },
-
   "sidebar": {
     "title": "Session Summarizer",
     "dark_mode": "Dark Mode",
@@ -53,7 +61,6 @@
     "source": "Conversation source (optional)",
     "source_placeholder": "e.g. Gemini CLI, OpenCode, VS Code chat..."
   },
-
   "key": {
     "title": "API Key",
     "unlocked": "Key unlocked",
@@ -76,7 +83,6 @@
     "passphrase_too_short": "Master password must be at least 8 characters.",
     "encrypt_info": "Your key is encrypted with a master password before being saved. Only the encrypted blob is stored — LGPD compliant."
   },
-
   "warnings": {
     "gemini_credits_cloud": "Gemini API requires prepaid credits. Add credits at [AI Studio](https://aistudio.google.com/apikey).",
     "gemini_credits_local": "⚠️ **Important notice:** Google has discontinued the free tier for the Gemini API. All requests now require **prepaid credits** purchased at [AI Studio](https://aistudio.google.com/apikey). We recommend using **Ollama** (local models, no cost).",
@@ -86,7 +92,6 @@
     "select_model": "Select or enter an Ollama model.",
     "rate_limit": "Wait {seconds}s before generating another summary."
   },
-
   "errors": {
     "internal": "Internal error while processing. Please try again.",
     "internal_prompt": "Internal error while generating prompt. Please try again.",
@@ -95,7 +100,6 @@
     "too_many_messages": "Message limit of {max} exceeded ({found} found). Split into smaller files.",
     "file_too_big": "File '{file}' exceeds the 50 MB limit."
   },
-
   "chat": {
     "files_sent": "{count} file(s) uploaded",
     "msg_extracted": "{count} messages extracted",
@@ -109,16 +113,10 @@
     "generating_summary": "Generating summary...",
     "empty_state": "👈 Upload one or more files (.json or .md) of LLM conversations and click **Generate Summary** to begin."
   },
-
   "processing": {
     "status_start": "Processing summary in {chunks} chunks...",
     "status_chunk": "Chunk {done}/{total}",
     "status_merge": "Generating final summary..."
   },
-
-  "seo": {
-    "description": "Turn AI conversations into structured knowledge. Supports Ollama, Gemini, OpenAI and Anthropic — 6-section summaries with streaming and TOON format."
-  },
-
   "footer": "[GitHub](https://github.com/EzuraWrath/llm-session-summarizer) · Ollama · Gemini · OpenAI · Anthropic · Streamlit"
 }

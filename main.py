@@ -1,6 +1,6 @@
 import streamlit as st
 
-from src.i18n import t, detect_language, LANG_MAP, FALLBACK
+from src.i18n import t, detect_language
 
 # ── Language detection ──
 if "lang" not in st.session_state:
@@ -20,31 +20,14 @@ st.set_page_config(
     initial_sidebar_state="auto",
 )
 
-# ── SEO meta tags ──
+# ── CSS ──
 st.markdown(
-    f"""
-<meta name="description" content="{t('seo.description', lang)}">
-<meta property="og:title" content="LLM Session Summarizer">
-<meta property="og:description" content="{t('seo.description', lang)}">
-<meta property="og:type" content="website">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="LLM Session Summarizer">
-<meta name="twitter:description" content="{t('seo.description', lang)}">
-<script type="application/ld+json">
-{{
-  "@context": "https://schema.org",
-  "@type": "WebApplication",
-  "name": "LLM Session Summarizer",
-  "description": "{t('seo.description', lang)}",
-  "applicationCategory": "DeveloperApplication",
-  "operatingSystem": "Web"
-}}
-</script>
+    """
 <style>
-.stApp {{ background-color: #0e1117; color: #e0e0e0; }}
-h1, h2, h3, p, li {{ color: #e0e0e0 !important; }}
-code {{ background-color: #1e1e2e !important; color: #cdd6f4 !important; }}
-a {{ color: #4285f4 !important; }}
+.stApp { background-color: #0e1117; color: #e0e0e0; }
+h1, h2, h3, p, li { color: #e0e0e0 !important; }
+code { background-color: #1e1e2e !important; color: #cdd6f4 !important; }
+a { color: #4285f4 !important; }
 </style>
 """,
     unsafe_allow_html=True,

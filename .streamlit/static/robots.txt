@@ -1,3 +1,0 @@
-User-agent: *
-Allow: /
-Sitemap: https://llm-session-summarizer.streamlit.app/sitemap.xml
