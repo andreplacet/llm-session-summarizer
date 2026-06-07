@@ -578,24 +578,25 @@ with st.sidebar:
 
     if not _ollama_available:
         st.info(
-            "🖥️ **Demo gratuita via Streamlit Cloud** — o servidor Ollama "
-            "não está disponível neste ambiente. "
-            "Para usar modelos locais (grátis, sem API key, privacidade total), "
-            "execute o projeto no seu computador:\n\n"
-            "```bash\ncd ~/dev/personal/python/llm-session-summarizer\n"
-            "source .venv/bin/activate\n"
-            "ollama serve  # em outro terminal\n"
-            "streamlit run main.py\n```"
+            "🖥️ **Ambiente cloud** — Ollama requer servidor local. "
+            "Use **Gemini** com API key ou execute o projeto localmente "
+            "para usar modelos gratuitos."
         )
 
     # ── Key management (only for Gemini) ──
     if provider_name == "gemini":
-        st.warning(
-            "⚠️ **Aviso importante:** O Google descontinuou o tier gratuito da API Gemini. "
-            "Todas as requisições agora exigem **créditos pré-pagos** comprados no "
-            "[AI Studio](https://aistudio.google.com/apikey). "
-            "Recomendamos usar **Ollama** (modelos locais, sem custo)."
-        )
+        if not _ollama_available:
+            st.warning(
+                "⚠️ **API Gemini requer créditos pré-pagos.** "
+                "Adicione créditos no [AI Studio](https://aistudio.google.com/apikey)."
+            )
+        else:
+            st.warning(
+                "⚠️ **Aviso importante:** O Google descontinuou o tier gratuito da API Gemini. "
+                "Todas as requisições agora exigem **créditos pré-pagos** comprados no "
+                "[AI Studio](https://aistudio.google.com/apikey). "
+                "Recomendamos usar **Ollama** (modelos locais, sem custo)."
+            )
         st.subheader("🔑 Chave da API")
 
         if _key_is_unlocked():
@@ -730,7 +731,7 @@ with st.sidebar:
 
     session_title = st.text_input(
         "📝 Título da sessão",
-        placeholder="Ex: Configuração do Marten Outbox",
+        placeholder="Ex: Sessão de desenvolvimento",
     )
 
     can_process = uploaded_files and (provider_name == "ollama" or _get_active_api_key())
@@ -838,6 +839,11 @@ for idx, msg in enumerate(st.session_state.messages):
         if st.button("🤖 Gerar prompt de continuidade", key=f"gen_{idx}", use_container_width=True):
             st.session_state["prompt_to_generate"] = idx
             st.rerun()
+
+if st.session_state.messages:
+    if st.button("🗑️ Novo resumo", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
 
 if process_btn and uploaded_files:
     try:
