@@ -46,8 +46,7 @@ def t(key: str, lang: str | None = None, **kwargs) -> str:
 
 def detect_language():
     """Inject JS to detect browser language, redirect with ?lang= on first visit."""
-    import streamlit.components.v1 as components
-    components.html("""
+    st.html("""
     <script>
     if (!window.location.search.includes('lang=')) {
         var lang = (navigator.language || 'pt-BR').split('-')[0];
@@ -56,4 +55,4 @@ def detect_language():
         window.location.search = '?lang=' + code;
     }
     </script>
-    """, height=0)
+    """)
