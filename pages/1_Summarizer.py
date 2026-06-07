@@ -80,8 +80,7 @@ def _apply_theme(dark: bool) -> None:
     }}
     .main .block-container {{
         color: {fg};
-        max-width: 95% !important;
-        padding: 2rem 3rem 2rem 3rem;
+        padding: 1rem 2rem 1rem 2rem;
     }}
 
     /* ── Text defaults ── */
@@ -114,7 +113,7 @@ def _apply_theme(dark: bool) -> None:
         background-color: {sbg} !important;
         border: 1px solid {border} !important;
         border-radius: 14px;
-        padding: 20px 24px;
+        padding: 16px 20px;
         margin-bottom: 8px;
     }}
 
@@ -490,7 +489,7 @@ def _run_chunked_summary(provider, conversation, model_name, fmt: str = "markdow
     chunks = _split_into_chunks(conversation)
     total_chunks = len(chunks)
 
-    progress = st.progress(0, text="Processando trechos da conversa...")
+    progress = st.progress(0, text="Processando...")
     status = st.empty()
     semaphore = asyncio.Semaphore(max_concurrent)
 
@@ -504,7 +503,7 @@ def _run_chunked_summary(provider, conversation, model_name, fmt: str = "markdow
             )
             progress.progress(
                 (idx + 1) / total_chunks,
-                text=f"Processando trecho {idx + 1}/{total_chunks}...",
+                text=f"Trecho {idx + 1}/{total_chunks}...",
             )
             return f"--- Trecho {idx + 1} de {total_chunks} ---\n{result}"
 
@@ -516,16 +515,16 @@ def _run_chunked_summary(provider, conversation, model_name, fmt: str = "markdow
 
     partial_summaries = asyncio.run(_run_all())
 
-    status.info(f"{total_chunks} trechos processados. Gerando resumo final...")
+    status.info(f"{total_chunks} trechos. Gerando resumo...")
 
     merge_prompt = MERGE_PROMPT.format(partial_summaries="\n\n".join(partial_summaries))
+
+    progress.empty()
+    status.empty()
 
     response = st.write_stream(
         _async_iter_to_sync(provider, SYSTEM_PROMPT, merge_prompt)
     )
-
-    progress.empty()
-    status.empty()
 
     return response
 
