@@ -504,7 +504,7 @@ def _run_chunked_summary(provider, conversation, model_name, fmt: str = "markdow
                 user_prompt=prompt,
             )
             completed["count"] += 1
-            s.update(label=f"Trecho {completed['count']}/{total_chunks}")
+            s.update(label=t("processing.status_chunk", lang, done=completed["count"], total=total_chunks))
             return f"--- Trecho {idx + 1} de {total_chunks} ---\n{result}"
 
     async def _run_all() -> list[str]:
@@ -513,9 +513,9 @@ def _run_chunked_summary(provider, conversation, model_name, fmt: str = "markdow
             tasks.append(_summarize_chunk(chunk, i))
         return await asyncio.gather(*tasks)
 
-    with st.status(f"Processando resumo em {total_chunks} trechos...") as s:
+    with st.status(t("processing.status_start", lang, chunks=total_chunks)) as s:
         partial_summaries = asyncio.run(_run_all())
-        s.update(label="Gerando resumo final...", state="running")
+        s.update(label=t("processing.status_merge", lang), state="running")
 
     merge_prompt = MERGE_PROMPT.format(partial_summaries="\n\n".join(partial_summaries))
 
@@ -536,8 +536,8 @@ def _handle_process(
     with st.chat_message("user"):
         files_list = "\n".join(f"- `{fn}`" for fn in filenames)
         st.markdown(
-            f"**📂 {len(filenames)} arquivo(s) enviado(s):**\n\n{files_list}\n\n"
-            f"_{msg_count} mensagens extraídas_"
+            f"**📂 {t('chat.files_sent', lang, count=len(filenames))}:**\n\n{files_list}\n\n"
+            f"_{t('chat.msg_extracted', lang, count=msg_count)}_"
         )
 
     # Generate summary
@@ -545,8 +545,8 @@ def _handle_process(
         try:
             if msg_count <= CHUNK_SIZE:
                 prompt, est_tokens = _build_direct_prompt(conversation, fmt)
-                st.caption(f"📊 ~{est_tokens} tokens (prompt + sistema)")
-                with st.spinner("Gerando resumo..."):
+                st.caption(t("chat.tokens_estimate", lang, count=est_tokens))
+                with st.spinner(t("chat.generating_summary", lang)):
                     response = st.write_stream(
                         _async_iter_to_sync(provider, SYSTEM_PROMPT, prompt)
                     )
@@ -560,7 +560,7 @@ def _handle_process(
             logging.getLogger("llm_summarizer").error(
                 "Erro ao gerar resumo", exc_info=True
             )
-            response = "Erro interno ao processar. Tente novamente."
+            response = t("errors.internal", lang)
             st.error(response)
 
     # Save to session state
@@ -596,9 +596,9 @@ def _handle_process(
 # UI — Sidebar
 # ---------------------------------------------------------------------------
 with st.sidebar:
-    st.title("🔬 Session Summarizer")
+    st.title(f"🔬 {t('sidebar.title', lang)}")
 
-    dark_mode = st.toggle("🌙 Dark Mode", value=True)
+    dark_mode = st.toggle(f"🌙 {t('sidebar.dark_mode', lang)}", value=True)
     _apply_theme(dark_mode)
 
     st.divider()
@@ -608,116 +608,97 @@ with st.sidebar:
 
     _provider_index = 0 if _ollama_available else 1
     _provider_help = (
-        "Ollama roda localmente (sem API key). Gemini usa API do Google AI Studio."
+        t("sidebar.provider_help_ollama", lang)
     )
     if not _ollama_available:
-        _provider_help = (
-            "☁️ Ollama indisponível neste ambiente. "
-            "Use Gemini (API key) ou execute o projeto localmente para usar Ollama."
-        )
+        _provider_help = t("sidebar.provider_help_cloud", lang)
 
     provider_name = st.selectbox(
-        "🤖 Provedor",
+        f"🤖 {t('sidebar.provider', lang)}",
         ["ollama", "gemini", "openai", "anthropic"],
         index=_provider_index,
         help=_provider_help,
     )
 
     if not _ollama_available:
-        st.info(
-            "🖥️ **Ambiente cloud** — Ollama requer servidor local. "
-            "Use **Gemini** com API key ou execute o projeto localmente "
-            "para usar modelos gratuitos."
-        )
+        st.info(t("sidebar.cloud_info", lang))
 
     # ── Key management (for providers that need API keys) ──
     if provider_name != "ollama":
         if provider_name == "gemini":
             if not _ollama_available:
-                st.warning(
-                    "⚠️ **API Gemini requer créditos pré-pagos.** "
-                    "Adicione créditos no [AI Studio](https://aistudio.google.com/apikey)."
-                )
+                st.warning(t("warnings.gemini_credits_cloud", lang))
             else:
-                st.warning(
-                    "⚠️ **Aviso importante:** O Google descontinuou o tier gratuito da API Gemini. "
-                    "Todas as requisições agora exigem **créditos pré-pagos** comprados no "
-                    "[AI Studio](https://aistudio.google.com/apikey). "
-                    "Recomendamos usar **Ollama** (modelos locais, sem custo)."
-                )
-        st.subheader("🔑 Chave da API")
+                st.warning(t("warnings.gemini_credits_local", lang))
+        st.subheader(f"🔑 {t('key.title', lang)}")
 
         if _key_is_unlocked(provider_name):
-            st.success("🔓 Chave desbloqueada")
+            st.success(f"🔓 {t('key.unlocked', lang)}")
             key_val = st.session_state.get(f"api_key_{provider_name}", "")
             masked = key_val[:4] + "••••" + key_val[-4:] if len(key_val) > 10 else "••••"
             st.caption(f"`{masked}`")
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🔒 Bloquear", use_container_width=True, key=f"lock_{provider_name}"):
+                if st.button(f"🔒 {t('key.lock', lang)}", use_container_width=True, key=f"lock_{provider_name}"):
                     _lock_key(provider_name)
                     st.session_state.pop(f"api_key_{provider_name}", None)
                     st.rerun()
             with col2:
-                if st.button("🗑️ Remover", use_container_width=True, key=f"delkey_{provider_name}"):
+                if st.button(f"🗑️ {t('key.remove', lang)}", use_container_width=True, key=f"delkey_{provider_name}"):
                     _delete_stored_key(provider_name)
                     st.rerun()
 
         elif _key_is_stored(provider_name):
-            st.info("🔒 Chave criptografada salva")
+            st.info(f"🔒 {t('key.stored', lang)}")
             passphrase = st.text_input(
-                "Senha mestra",
+                t("key.passphrase", lang),
                 type="password",
-                placeholder="Digite sua senha para desbloquear",
+                placeholder=t("key.passphrase_placeholder", lang),
                 key=f"unlock_{provider_name}",
             )
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🔓 Desbloquear", use_container_width=True, key=f"unlockbtn_{provider_name}", disabled=not passphrase):
+                if st.button(f"🔓 {t('key.unlock', lang)}", use_container_width=True, key=f"unlockbtn_{provider_name}", disabled=not passphrase):
                     if _unlock_key(provider_name, passphrase):
                         st.session_state.pop(f"unlock_{provider_name}", None)
                         st.rerun()
                     else:
-                        st.error("Senha incorreta!")
+                        st.error(t("key.wrong_password", lang))
             with col2:
-                if st.button("🗑️ Remover", use_container_width=True, key=f"delkey2_{provider_name}"):
+                if st.button(f"🗑️ {t('key.remove', lang)}", use_container_width=True, key=f"delkey2_{provider_name}"):
                     _delete_stored_key(provider_name)
                     st.rerun()
 
         else:
-            st.caption(
-                "Sua chave é criptografada com uma senha mestra "
-                "antes de ser salva. Apenas o blob criptografado "
-                "fica armazenado — em conformidade com a LGPD."
-            )
-            with st.expander("⚙️ Configurar chave", expanded=not _get_active_api_key(provider_name)):
+            st.caption(t("key.encrypt_info", lang))
+            with st.expander(f"⚙️ {t('key.config_title', lang)}", expanded=not _get_active_api_key(provider_name)):
                 api_key_input = st.text_input(
-                    "API Key",
+                    t("key.api_key_label", lang),
                     type="password",
-                    placeholder="sk-... ou AIza...",
+                    placeholder=t("key.api_key_placeholder", lang),
                     key=f"apikey_{provider_name}",
                 )
                 save_mode = st.radio(
-                    "Modo de armazenamento",
-                    ["💾 Salvar criptografada (recomendado)", "⚡ Apenas nesta sessão"],
+                    t("key.save_mode", lang),
+                    [f"💾 {t('key.save_encrypted', lang)}", f"⚡ {t('key.save_session', lang)}"],
                     index=0,
                     key=f"savemode_{provider_name}",
                 )
                 if save_mode.startswith("💾"):
                     master_pass = st.text_input(
-                        "Senha mestra",
+                        t("key.passphrase", lang),
                         type="password",
-                        placeholder="Crie uma senha forte",
+                        placeholder=t("key.create_passphrase", lang),
                         key=f"master_{provider_name}",
                     )
                     if st.button(
-                        "💾 Salvar chave criptografada",
+                        f"💾 {t('key.save_button', lang)}",
                         use_container_width=True,
                         key=f"savebtn_{provider_name}",
                         disabled=not (api_key_input and master_pass),
                     ):
                         if len(master_pass) < 8:
-                            st.error("A senha mestra deve ter pelo menos 8 caracteres.")
+                            st.error(t("key.passphrase_too_short", lang))
                         else:
                             _save_key(provider_name, api_key_input, master_pass)
                             st.session_state.pop(f"apikey_{provider_name}", None)
@@ -725,7 +706,7 @@ with st.sidebar:
                             st.rerun()
                 else:
                     if st.button(
-                        "⚡ Usar nesta sessão",
+                        f"⚡ {t('key.use_session', lang)}",
                         use_container_width=True,
                         key=f"session_{provider_name}",
                         disabled=not api_key_input,
@@ -740,35 +721,31 @@ with st.sidebar:
     if provider_name == "ollama":
         _ollama_models = _get_ollama_models()
         if _ollama_models:
-            model_options = _ollama_models + ["✏️ Outro (digite abaixo)"]
+            model_options = _ollama_models + [f"✏️ {t('sidebar.custom_model', lang)}"]
             default_idx = 0
         else:
-            model_options = ["Nenhum modelo detectado", "✏️ Outro (digite abaixo)"]
+            model_options = [t("sidebar.no_models", lang), f"✏️ {t('sidebar.custom_model', lang)}"]
             default_idx = 1
-            st.warning(
-                "Ollama não detectado. "
-                "Se estiver rodando localmente, inicie com `ollama serve`. "
-                "Se estiver na versão cloud (demo gratuita), use o provedor Gemini."
-            )
+            st.warning(t("sidebar.no_ollama", lang))
     elif provider_name == "openai":
-        model_options = [f"{m}  ({OPENAI_LABELS.get(m, '')})" for m in OPENAI_MODELS] + ["✏️ Outro (digite abaixo)"]
+        model_options = [f"{m}  ({OPENAI_LABELS.get(m, '')})" for m in OPENAI_MODELS] + [f"✏️ {t('sidebar.custom_model', lang)}"]
         default_idx = 0
     elif provider_name == "anthropic":
-        model_options = [f"{m}  ({ANTHROPIC_LABELS.get(m, '')})" for m in ANTHROPIC_MODELS] + ["✏️ Outro (digite abaixo)"]
+        model_options = [f"{m}  ({ANTHROPIC_LABELS.get(m, '')})" for m in ANTHROPIC_MODELS] + [f"✏️ {t('sidebar.custom_model', lang)}"]
         default_idx = 0
     else:
-        model_options = [f"{m}  ({GEMINI_LABELS.get(m, '')})" for m in GEMINI_MODELS] + ["✏️ Outro (digite abaixo)"]
+        model_options = [f"{m}  ({GEMINI_LABELS.get(m, '')})" for m in GEMINI_MODELS] + [f"✏️ {t('sidebar.custom_model', lang)}"]
         default_idx = 0
 
-    model_choice = st.selectbox("📊 Modelo", model_options, index=default_idx)
-    if model_choice == "✏️ Outro (digite abaixo)":
+    model_choice = st.selectbox(f"📊 {t('sidebar.model', lang)}", model_options, index=default_idx)
+    if model_choice == f"✏️ {t('sidebar.custom_model', lang)}":
         model_name = st.text_input(
             "Nome do modelo",
-            placeholder="Ex: llama3 ou gemini-3-flash-preview",
+            placeholder=t("sidebar.custom_model_placeholder", lang),
             key="custom_model",
             max_chars=100,
         )
-    elif model_choice == "Nenhum modelo detectado":
+    elif model_choice == t("sidebar.no_models", lang):
         model_name = st.text_input(
             "Nome do modelo",
             placeholder="llama3",
@@ -779,23 +756,22 @@ with st.sidebar:
         model_name = model_choice.split("  ")[0]
 
     fmt_choice = st.selectbox(
-        "📦 Formato do prompt",
+        f"📦 {t('sidebar.format', lang)}",
         options=list(FORMATTERS.keys()),
         format_func=lambda k: FORMATTERS[k].label,
-        help="TOON reduz ~5-15% de tokens removendo formatação visual. "
-             "Markdown mantém emojis e timestamps (mais legível para a IA).",
+        help=t("sidebar.format_help", lang),
     )
 
     uploaded_files = st.file_uploader(
-        "📂 Upload JSON(s) ou Markdown",
+        f"📂 {t('sidebar.upload', lang)}",
         type=["json", "md"],
         accept_multiple_files=True,
-        help="Formatos suportados: Gemini CLI (.json), OpenCode (.md). Limite: 50 MB por arquivo.",
+        help=t("sidebar.upload_help", lang),
     )
 
     session_title = st.text_input(
-        "📝 Título da sessão",
-        placeholder="Ex: Sessão de desenvolvimento",
+        f"📝 {t('sidebar.session_title', lang)}",
+        placeholder=t("sidebar.session_placeholder", lang),
         max_chars=200,
     )
 
@@ -807,12 +783,12 @@ with st.sidebar:
                 f.seek(0)
             conv, _ = _parse_all_files(uploaded_files)
             preview, preview_tokens = _build_conversation_text(conv.messages, fmt_choice)
-            st.caption(f"📊 ~{preview_tokens} tokens de conversa (formato: {FORMATTERS[fmt_choice].label.split()[0]})")
+            st.caption(t("chat.tokens_preview", lang, count=preview_tokens, fmt=FORMATTERS[fmt_choice].label.split()[0]))
         except Exception:
             pass
 
     process_btn = st.button(
-        "🔍 Gerar Resumo",
+        f"🔍 {t('sidebar.generate', lang)}",
         type="primary",
         disabled=not can_process,
         use_container_width=True,
@@ -831,11 +807,11 @@ with st.sidebar:
             )
         )
     if uploaded_files and provider_name == "ollama" and not model_name:
-        st.warning("Selecione ou digite um modelo Ollama.")
+        st.warning(t("warnings.select_model", lang))
 
     st.divider()
 
-    st.subheader("📜 Histórico")
+    st.subheader(f"📜 {t('sidebar.history_title', lang)}")
     # Purge expired sessions before displaying
     session_key = st.session_state.get("session_key", "")
     DB.purge_expired_sessions(session_key, TOKEN_MAX_AGE)
@@ -868,21 +844,18 @@ with st.sidebar:
                     st.rerun()
 
     if rows:
-        if st.button("🗑️ Apagar todo o histórico", use_container_width=True, key="clear_all_history"):
+        if st.button(f"🗑️ {t('sidebar.history_delete_all', lang)}", use_container_width=True, key="clear_all_history"):
             DB.delete_all_by_session_key(session_key)
             st.rerun()
     else:
-        st.caption("Nenhum resumo gerado nesta sessão.")
+        st.caption(t("sidebar.history_empty", lang))
 
-    st.caption(
-        "🕐 O histórico expira automaticamente após 30 dias. "
-        "Faça download dos resumos que quiser guardar antes desse prazo."
-    )
+    st.caption(f"🕐 {t('sidebar.history_expiry', lang)}")
 
 # ---------------------------------------------------------------------------
 # UI — Main chat area
 # ---------------------------------------------------------------------------
-st.title("Resumo da Conversa")
+st.title(t("sidebar.title", lang))
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -893,7 +866,7 @@ for idx, msg in enumerate(st.session_state.messages):
 
     if msg["role"] == "assistant" and msg["content"] and not msg["content"].startswith("❌"):
         is_prompt = msg.get("is_prompt", False)
-        label = "📥 Baixar prompt .md" if is_prompt else "📥 Baixar resumo .md"
+        label = t("chat.download_prompt", lang) if is_prompt else t("chat.download_summary", lang)
 
         sanitized = msg["content"].replace("`", "").replace("#", "").replace("*", "").strip()
         filename = (sanitized[:40] + "...") if len(sanitized) > 40 else sanitized
@@ -918,15 +891,15 @@ for idx, msg in enumerate(st.session_state.messages):
                     label_visibility="collapsed",
                 )
             if is_prompt:
-                st.caption("✅ Prompt de continuidade gerado")
+                st.caption(f"✅ {t('chat.prompt_generated', lang)}")
 
     if msg["role"] == "assistant" and not msg.get("is_prompt") and msg["content"] and not msg["content"].startswith("❌"):
-        if st.button("🤖 Gerar prompt de continuidade", key=f"gen_{idx}", use_container_width=True):
+        if st.button(f"🤖 {t('chat.generate_prompt', lang)}", key=f"gen_{idx}", use_container_width=True):
             st.session_state["prompt_to_generate"] = idx
             st.rerun()
 
 if st.session_state.messages:
-    if st.button("🗑️ Novo resumo", use_container_width=True):
+    if st.button(f"🗑️ {t('sidebar.new_summary', lang)}", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
@@ -936,7 +909,7 @@ if process_btn and uploaded_files:
     last = st.session_state.get("_last_process_time", 0)
     cooldown = 5
     if now - last < cooldown:
-        st.warning(f"Aguarde {cooldown - int(now - last)}s antes de gerar outro resumo.")
+        st.warning(t("warnings.rate_limit", lang, seconds=cooldown - int(now - last)))
     else:
         st.session_state["_last_process_time"] = now
         try:
@@ -958,12 +931,11 @@ if process_btn and uploaded_files:
             logging.getLogger("llm_summarizer").error(
                 "Erro inesperado ao processar", exc_info=True
             )
-            st.error("Erro interno ao processar. Tente novamente.")
+            st.error(t("errors.internal", lang))
 
 if not st.session_state.messages and not uploaded_files:
     st.info(
-        "👈 Faça upload de um ou mais arquivos (.json ou .md) de conversas com LLMs "
-        "e clique em **Gerar Resumo** para começar."
+        t("chat.empty_state", lang)
     )
 
 # Handle prompt generation — runs AFTER messages render, so streaming stays at bottom
@@ -995,7 +967,7 @@ O prompt deve ser autocontido — o dev deve conseguir copiá-lo e colar
 em qualquer CLI de IA para continuar o trabalho imediatamente."""
 
         with st.chat_message("assistant"):
-            with st.spinner("🤖 Gerando prompt de continuidade..."):
+            with st.spinner(f"🤖 {t('chat.generating_prompt', lang)}"):
                 try:
                     response = st.write_stream(
                         _async_iter_to_sync(
@@ -1025,7 +997,7 @@ em qualquer CLI de IA para continuar o trabalho imediatamente."""
                     logging.getLogger("llm_summarizer").error(
                         "Erro ao gerar prompt de continuidade", exc_info=True
                     )
-                    st.error("Erro interno ao gerar prompt. Tente novamente.")
+                    st.error(t("errors.internal_prompt", lang))
 
     st.session_state["prompt_to_generate"] = None
     st.rerun()
