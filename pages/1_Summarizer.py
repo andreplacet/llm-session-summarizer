@@ -277,7 +277,7 @@ PROVIDER_ENV_VARS = {
 
 DB = Database()
 
-lang = st.session_state.get("lang", "pt_BR")
+lang = st.session_state.get("lang", "en")
 
 # Persistent session token (via URL query param, survives tab close)
 TOKEN_MAX_AGE = 30  # days
@@ -600,7 +600,7 @@ def _handle_process(
 # ---------------------------------------------------------------------------
 with st.sidebar:
     # ── Lang selector ──
-    lang = st.session_state.get("lang", "pt_BR")
+    lang = st.session_state.get("lang", "en")
     lang_labels = {"pt_BR": "Português", "en": "English", "es": "Español"}
     selected_lang = st.selectbox(
         t("sidebar.lang", lang),
