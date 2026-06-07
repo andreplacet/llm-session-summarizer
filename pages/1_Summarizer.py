@@ -226,7 +226,10 @@ def _apply_theme(dark: bool) -> None:
 # ---------------------------------------------------------------------------
 def _async_iter_to_sync(provider, system_prompt: str, user_prompt: str) -> Iterator[str]:
     if hasattr(provider, "generate_stream_sync"):
-        yield from provider.generate_stream_sync(system_prompt, user_prompt)
+        try:
+            yield from provider.generate_stream_sync(system_prompt, user_prompt)
+        except Exception as exc:
+            raise RuntimeError(str(exc)[:200]) from exc
         return
 
     q: Queue = Queue()
@@ -257,7 +260,7 @@ def _async_iter_to_sync(provider, system_prompt: str, user_prompt: str) -> Itera
         if kind == "done":
             break
         elif kind == "error":
-            raise value
+            raise RuntimeError(str(value)[:200]) from value
         else:
             yield value
 
@@ -489,9 +492,8 @@ def _run_chunked_summary(provider, conversation, model_name, fmt: str = "markdow
     chunks = _split_into_chunks(conversation)
     total_chunks = len(chunks)
 
-    progress = st.progress(0, text="Processando...")
-    status = st.empty()
     semaphore = asyncio.Semaphore(max_concurrent)
+    completed = {"count": 0}
 
     async def _summarize_chunk(chunk_conv: ParsedConversation, idx: int) -> str:
         async with semaphore:
@@ -501,10 +503,8 @@ def _run_chunked_summary(provider, conversation, model_name, fmt: str = "markdow
                 system_prompt="Você é um analista que resume conversas técnicas. Escreva em português do Brasil.",
                 user_prompt=prompt,
             )
-            progress.progress(
-                (idx + 1) / total_chunks,
-                text=f"Trecho {idx + 1}/{total_chunks}...",
-            )
+            completed["count"] += 1
+            s.update(label=f"Trecho {completed['count']}/{total_chunks}")
             return f"--- Trecho {idx + 1} de {total_chunks} ---\n{result}"
 
     async def _run_all() -> list[str]:
@@ -513,14 +513,11 @@ def _run_chunked_summary(provider, conversation, model_name, fmt: str = "markdow
             tasks.append(_summarize_chunk(chunk, i))
         return await asyncio.gather(*tasks)
 
-    partial_summaries = asyncio.run(_run_all())
-
-    status.info(f"{total_chunks} trechos. Gerando resumo...")
+    with st.status(f"Processando resumo em {total_chunks} trechos...") as s:
+        partial_summaries = asyncio.run(_run_all())
+        s.update(label="Gerando resumo final...", state="running")
 
     merge_prompt = MERGE_PROMPT.format(partial_summaries="\n\n".join(partial_summaries))
-
-    progress.empty()
-    status.empty()
 
     response = st.write_stream(
         _async_iter_to_sync(provider, SYSTEM_PROMPT, merge_prompt)
@@ -549,9 +546,10 @@ def _handle_process(
             if msg_count <= CHUNK_SIZE:
                 prompt, est_tokens = _build_direct_prompt(conversation, fmt)
                 st.caption(f"📊 ~{est_tokens} tokens (prompt + sistema)")
-                response = st.write_stream(
-                    _async_iter_to_sync(provider, SYSTEM_PROMPT, prompt)
-                )
+                with st.spinner("Gerando resumo..."):
+                    response = st.write_stream(
+                        _async_iter_to_sync(provider, SYSTEM_PROMPT, prompt)
+                    )
             else:
                 response = _run_chunked_summary(
                     provider, conversation, model_name, fmt,
