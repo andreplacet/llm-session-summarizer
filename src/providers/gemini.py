@@ -65,7 +65,7 @@ class GeminiProvider(AbstractProvider):
         return response.text or ""
 
     async def generate_stream(self, system_prompt: str, user_prompt: str) -> AsyncIterator[str]:
-        stream = self._client.aio.models.generate_content_stream(
+        stream = await self._client.aio.models.generate_content_stream(
             model=self.model,
             contents=user_prompt,
             config=self._build_config(system_prompt),
