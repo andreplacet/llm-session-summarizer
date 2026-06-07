@@ -13,7 +13,9 @@ from dotenv import load_dotenv
 from src.chunker import CHUNK_SIZE, summarize_conversation
 from src.crypto import encrypt, decrypt
 from src.models import ParsedConversation, Message
+from src.parsers.base import AbstractParser
 from src.parsers.gemini_cli import GeminiCLIParser
+from src.parsers.opencode_md import OpenCodeMDParser
 from src.prompts.templates import SYSTEM_PROMPT
 from src.providers.gemini import AVAILABLE_MODELS as GEMINI_MODELS, MODEL_LABELS as GEMINI_LABELS, DEFAULT_MODEL as GEMINI_DEFAULT, GeminiProvider
 from src.providers.ollama import OllamaProvider
@@ -24,9 +26,10 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 # Parser registry — add new parsers here
 # ---------------------------------------------------------------------------
-PARSERS: dict[str, GeminiCLIParser] = {
-    "gemini_cli": GeminiCLIParser(),
-}
+PARSERS: list[AbstractParser] = [
+    GeminiCLIParser(),
+    OpenCodeMDParser(),
+]
 
 # ---------------------------------------------------------------------------
 # Theme
@@ -364,10 +367,15 @@ def _parse_all_files(uploaded_files) -> tuple[ParsedConversation, list[str]]:
 
     for f in uploaded_files:
         filenames.append(f.name)
-        raw = json.loads(f.read())
-        f.seek(0)  # reset for potential re-read
+        content_bytes = f.read()
+        f.seek(0)
 
-        for name, parser in PARSERS.items():
+        if f.name.endswith(".md"):
+            raw = content_bytes.decode("utf-8")
+        else:
+            raw = json.loads(content_bytes)
+
+        for parser in PARSERS:
             if parser.can_parse(raw):
                 conv = parser.parse(raw)
                 all_messages.extend(conv.messages)
@@ -375,9 +383,12 @@ def _parse_all_files(uploaded_files) -> tuple[ParsedConversation, list[str]]:
                     metadata = conv.metadata
                 break
         else:
+            sources = ", ".join(
+                type(p).__name__.replace("Parser", "") for p in PARSERS
+            )
             raise ValueError(
                 f"Formato do arquivo '{f.name}' não reconhecido. "
-                f"Formatos suportados: {', '.join(PARSERS.keys())}"
+                f"Formatos suportados: {sources}"
             )
 
     if not all_messages:
@@ -638,9 +649,9 @@ with st.sidebar:
 
     uploaded_files = st.file_uploader(
         "📂 Upload JSON(s)",
-        type=["json"],
+        type=["json", "md"],
         accept_multiple_files=True,
-        help="Formatos suportados: Gemini CLI (.json)",
+        help="Formatos suportados: Gemini CLI (.json), OpenCode (.md)",
     )
 
     session_title = st.text_input(
@@ -752,7 +763,7 @@ if process_btn and uploaded_files:
 
 if not st.session_state.messages and not uploaded_files:
     st.info(
-        "👈 Faça upload de um ou mais arquivos JSON de conversas com LLMs "
+        "👈 Faça upload de um ou mais arquivos (.json ou .md) de conversas com LLMs "
         "e clique em **Gerar Resumo** para começar."
     )
 

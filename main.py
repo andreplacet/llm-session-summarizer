@@ -29,7 +29,7 @@ with col:
     st.markdown("### Transforme conversas com IAs em conhecimento estruturado")
 
     st.markdown("""
-    Faça upload de arquivos JSON das suas sessões com LLMs (Gemini CLI, OpenCode, etc.)
+    Faça upload de arquivos `.json` (Gemini CLI) ou `.md` (OpenCode) das suas sessões com LLMs
     e receba um resumo didático em **6 seções** — com streaming em tempo real,
     prompts de continuidade e downloads em markdown.
     """)
@@ -41,7 +41,7 @@ with col:
     st.markdown("""
     1. Vá para **Summarizer** no menu lateral →
     2. Selecione o provedor: **Ollama** (local, gratuito) ou **Gemini** (cloud)
-    3. Faça upload de um ou mais arquivos `.json` de conversas
+    3. Faça upload de um ou mais arquivos `.json` ou `.md` de conversas
     4. Clique em **Gerar Resumo** e veja o streaming
     5. Baixe o `.md` ou gere um **prompt de continuidade**
     """)
