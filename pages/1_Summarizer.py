@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import sys
 import uuid
@@ -305,7 +306,7 @@ def _save_key(provider_name: str, api_key: str, passphrase: str) -> None:
 
 def _delete_stored_key(provider_name: str) -> None:
     DB.delete_encrypted_key(provider_name)
-    st.session_state[f"api_key_{provider_name}"] = None
+    st.session_state.pop(f"api_key_{provider_name}", None)
 
 
 def _get_active_api_key(provider_name: str) -> str | None:
@@ -412,6 +413,10 @@ def _build_direct_prompt(conversation: ParsedConversation, fmt: str = "markdown"
 # ---------------------------------------------------------------------------
 # Processing pipeline
 # ---------------------------------------------------------------------------
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+MAX_TOTAL_MESSAGES = 500
+
+
 def _parse_all_files(uploaded_files) -> tuple[ParsedConversation, list[str]]:
     all_messages: list[Message] = []
     filenames: list[str] = []
@@ -419,6 +424,10 @@ def _parse_all_files(uploaded_files) -> tuple[ParsedConversation, list[str]]:
 
     for f in uploaded_files:
         filenames.append(f.name)
+        if f.size > MAX_UPLOAD_BYTES:
+            raise ValueError(
+                f"Arquivo '{f.name}' excede o limite de 50 MB."
+            )
         content_bytes = f.read()
         f.seek(0)
 
@@ -445,6 +454,12 @@ def _parse_all_files(uploaded_files) -> tuple[ParsedConversation, list[str]]:
 
     if not all_messages:
         raise ValueError("Nenhuma mensagem relevante encontrada nos arquivos enviados.")
+
+    if len(all_messages) > MAX_TOTAL_MESSAGES:
+        raise ValueError(
+            f"Limite de {MAX_TOTAL_MESSAGES} mensagens excedido "
+            f"({len(all_messages)} encontradas). Divida em arquivos menores."
+        )
 
     combined = ParsedConversation(messages=all_messages, metadata=metadata)
     return combined, filenames
@@ -529,7 +544,11 @@ def _handle_process(
                     max_concurrent=1 if isinstance(provider, OllamaProvider) else 5,
                 )
         except Exception as exc:
-            response = f"❌ **Erro ao gerar resumo:** {exc}"
+            import logging
+            logging.getLogger("llm_summarizer").error(
+                "Erro ao gerar resumo", exc_info=True
+            )
+            response = "Erro interno ao processar. Tente novamente."
             st.error(response)
 
     # Save to session state
@@ -618,12 +637,13 @@ with st.sidebar:
         if _key_is_unlocked(provider_name):
             st.success("🔓 Chave desbloqueada")
             key_val = st.session_state.get(f"api_key_{provider_name}", "")
-            masked = key_val[:6] + "•••" + key_val[-4:] if len(key_val) > 10 else "••••"
+            masked = key_val[:4] + "••••" + key_val[-4:] if len(key_val) > 10 else "••••"
             st.caption(f"`{masked}`")
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("🔒 Bloquear", use_container_width=True, key=f"lock_{provider_name}"):
                     _lock_key(provider_name)
+                    st.session_state.pop(f"api_key_{provider_name}", None)
                     st.rerun()
             with col2:
                 if st.button("🗑️ Remover", use_container_width=True, key=f"delkey_{provider_name}"):
@@ -642,6 +662,7 @@ with st.sidebar:
             with col1:
                 if st.button("🔓 Desbloquear", use_container_width=True, key=f"unlockbtn_{provider_name}", disabled=not passphrase):
                     if _unlock_key(provider_name, passphrase):
+                        st.session_state.pop(f"unlock_{provider_name}", None)
                         st.rerun()
                     else:
                         st.error("Senha incorreta!")
@@ -682,10 +703,12 @@ with st.sidebar:
                         key=f"savebtn_{provider_name}",
                         disabled=not (api_key_input and master_pass),
                     ):
-                        if len(master_pass) < 4:
-                            st.error("A senha mestra deve ter pelo menos 4 caracteres.")
+                        if len(master_pass) < 8:
+                            st.error("A senha mestra deve ter pelo menos 8 caracteres.")
                         else:
                             _save_key(provider_name, api_key_input, master_pass)
+                            st.session_state.pop(f"apikey_{provider_name}", None)
+                            st.session_state.pop(f"master_{provider_name}", None)
                             st.rerun()
                 else:
                     if st.button(
@@ -695,6 +718,7 @@ with st.sidebar:
                         disabled=not api_key_input,
                     ):
                         st.session_state[f"api_key_{provider_name}"] = api_key_input
+                        st.session_state.pop(f"apikey_{provider_name}", None)
                         st.rerun()
 
     # ── Model selector ──
@@ -729,12 +753,14 @@ with st.sidebar:
             "Nome do modelo",
             placeholder="Ex: llama3 ou gemini-3-flash-preview",
             key="custom_model",
+            max_chars=100,
         )
     elif model_choice == "Nenhum modelo detectado":
         model_name = st.text_input(
             "Nome do modelo",
             placeholder="llama3",
             key="custom_model2",
+            max_chars=100,
         )
     else:
         model_name = model_choice.split("  ")[0]
@@ -748,15 +774,16 @@ with st.sidebar:
     )
 
     uploaded_files = st.file_uploader(
-        "📂 Upload JSON(s)",
+        "📂 Upload JSON(s) ou Markdown",
         type=["json", "md"],
         accept_multiple_files=True,
-        help="Formatos suportados: Gemini CLI (.json), OpenCode (.md)",
+        help="Formatos suportados: Gemini CLI (.json), OpenCode (.md). Limite: 50 MB por arquivo.",
     )
 
     session_title = st.text_input(
         "📝 Título da sessão",
         placeholder="Ex: Sessão de desenvolvimento",
+        max_chars=200,
     )
 
     can_process = uploaded_files and (provider_name == "ollama" or _get_active_api_key(provider_name))
@@ -874,22 +901,34 @@ if st.session_state.messages:
         st.rerun()
 
 if process_btn and uploaded_files:
-    try:
-        if provider_name == "ollama":
-            provider = OllamaProvider(model=model_name)
-        elif provider_name == "openai":
-            provider = OpenAIProvider(model=model_name, api_key=_get_active_api_key("openai"))
-        elif provider_name == "anthropic":
-            provider = AnthropicProvider(model=model_name, api_key=_get_active_api_key("anthropic"))
-        else:
-            provider = GeminiProvider(model=model_name, api_key=_get_active_api_key("gemini"))
-        conversation, filenames = _parse_all_files(uploaded_files)
-        _handle_process(provider, conversation, filenames, model_name, session_title, fmt_choice)
-        st.rerun()
-    except ValueError as exc:
-        st.error(str(exc))
-    except Exception as exc:
-        st.error(f"Erro inesperado: {exc}")
+    import time
+    now = time.time()
+    last = st.session_state.get("_last_process_time", 0)
+    cooldown = 5
+    if now - last < cooldown:
+        st.warning(f"Aguarde {cooldown - int(now - last)}s antes de gerar outro resumo.")
+    else:
+        st.session_state["_last_process_time"] = now
+        try:
+            if provider_name == "ollama":
+                provider = OllamaProvider(model=model_name)
+            elif provider_name == "openai":
+                provider = OpenAIProvider(model=model_name, api_key=_get_active_api_key("openai"))
+            elif provider_name == "anthropic":
+                provider = AnthropicProvider(model=model_name, api_key=_get_active_api_key("anthropic"))
+            else:
+                provider = GeminiProvider(model=model_name, api_key=_get_active_api_key("gemini"))
+            conversation, filenames = _parse_all_files(uploaded_files)
+            _handle_process(provider, conversation, filenames, model_name, session_title, fmt_choice)
+            st.rerun()
+        except ValueError as exc:
+            st.error(str(exc))
+        except Exception as exc:
+            import logging
+            logging.getLogger("llm_summarizer").error(
+                "Erro inesperado ao processar", exc_info=True
+            )
+            st.error("Erro interno ao processar. Tente novamente.")
 
 if not st.session_state.messages and not uploaded_files:
     st.info(
@@ -952,7 +991,11 @@ em qualquer CLI de IA para continuar o trabalho imediatamente."""
                             type="prompt",
                         )
                 except Exception as exc:
-                    st.error(f"❌ Erro ao gerar prompt: {exc}")
+                    import logging
+                    logging.getLogger("llm_summarizer").error(
+                        "Erro ao gerar prompt de continuidade", exc_info=True
+                    )
+                    st.error("Erro interno ao gerar prompt. Tente novamente.")
 
     st.session_state["prompt_to_generate"] = None
     st.rerun()
