@@ -1,6 +1,6 @@
 from src.providers.base import AbstractProvider
 
-__all__ = ["AbstractProvider", "GeminiProvider", "OllamaProvider"]
+__all__ = ["AbstractProvider", "GeminiProvider", "OllamaProvider", "OpenAIProvider", "AnthropicProvider"]
 
 # Providers are imported lazily — do NOT eagerly import them here.
 # Eager imports would force google-genai and httpx at module-load time
