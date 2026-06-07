@@ -4,7 +4,7 @@ st.set_page_config(
     page_title="LLM Session Summarizer",
     page_icon="🔬",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="auto",
 )
 
 # ── CSS ──
@@ -28,6 +28,8 @@ with col:
 
     st.markdown("### Transforme conversas com IAs em conhecimento estruturado")
 
+    st.page_link("pages/1_Summarizer.py", label="Abrir Summarizer", icon=":material/arrow_forward:")
+
     st.markdown("""
     Faça upload de arquivos `.json` (Gemini CLI) ou `.md` (OpenCode) das suas sessões com LLMs
     e receba um resumo didático em **6 seções** — com streaming em tempo real,
@@ -38,8 +40,8 @@ with col:
 
     st.markdown("### 🚀 Como usar")
 
+    st.page_link("pages/1_Summarizer.py", label="1. Abra o Summarizer", icon=":material/arrow_forward:")
     st.markdown("""
-    1. Vá para **Summarizer** no menu lateral →
     2. Selecione o provedor: **Ollama** (local, gratuito) ou **Gemini** (cloud)
     3. Escolha o formato do prompt: **Markdown** ou **⚡ TOON** (econômico)
     4. Faça upload de um ou mais arquivos `.json` ou `.md` de conversas
