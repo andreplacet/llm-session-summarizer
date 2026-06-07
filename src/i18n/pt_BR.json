@@ -1,0 +1,122 @@
+{
+  "hero": {
+    "title": "Transforme conversas com IAs em conhecimento estruturado",
+    "cta": "Abrir Summarizer",
+    "desc": "Faça upload de arquivos `.json` (Gemini CLI) ou `.md` (OpenCode) e escolha entre **4 provedores** — Ollama, Gemini, OpenAI e Anthropic — para gerar resumos estruturados em **6 seções** com streaming, downloads em markdown e **formato TOON para economia de tokens**."
+  },
+  "howto": {
+    "title": "Como usar",
+    "step1": "1. Abra o Summarizer",
+    "steps": "2. Escolha o provedor: **Ollama**, **Gemini**, **OpenAI** ou **Anthropic**\n3. Escolha o formato do prompt: **Markdown** ou **⚡ TOON** (econômico)\n4. Faça upload de um ou mais arquivos `.json` ou `.md` de conversas\n5. Clique em **Gerar Resumo** e veja o streaming\n6. Baixe o `.md` ou gere um **prompt de continuidade**"
+  },
+  "providers": {
+    "title": "Providers",
+    "ollama": {
+      "name": "Ollama",
+      "desc": "- Modelos locais\n- Zero custo · Zero API key\n- Privacidade total"
+    },
+    "openai": {
+      "name": "OpenAI",
+      "desc": "- GPT-5.5 · GPT-5.4 · GPT-5.4 Mini\n- Requer API key\n- Fatia premium"
+    },
+    "gemini": {
+      "name": "Gemini",
+      "desc": "- 2.0 Flash · 3.x Preview\n- Requer API key\n- Créditos pré-pagos"
+    },
+    "anthropic": {
+      "name": "Anthropic",
+      "desc": "- Claude Opus 4.8 · Sonnet 4.6 · Haiku 4.5\n- Requer API key\n- Contexto de 1M tokens"
+    }
+  },
+  "toon": {
+    "title": "TOON — Economia de tokens",
+    "desc": "O projeto suporta **TOON (Token-Oriented Object Notation)**, um formato de prompt compacto que elimina emojis, markdown e timestamps — reduzindo **~10-15% de tokens** por requisição sem alterar o conteúdo da conversa.\n\n- **Markdown**: `### 🔥 Desenvolvedor _14:30:00_` → mais legível para a IA\n- **TOON**: `role:user ts:14:30:00` → mais econômico, mesmo resultado\n- Alterne entre os formatos no sidebar do Summarizer\n- Contador de tokens visível antes e durante a geração"
+  },
+  "sidebar": {
+    "title": "Session Summarizer",
+    "dark_mode": "Dark Mode",
+    "provider": "Provedor",
+    "format": "Formato do prompt",
+    "model": "Modelo",
+    "upload": "Upload JSON(s) ou Markdown",
+    "upload_help": "Formatos suportados: Gemini CLI (.json), OpenCode (.md). Limite: 50 MB por arquivo.",
+    "session_title": "Título da sessão",
+    "session_placeholder": "Sessão de desenvolvimento",
+    "generate": "Gerar Resumo",
+    "history_title": "Histórico",
+    "history_empty": "Nenhum resumo gerado nesta sessão.",
+    "history_delete_all": "Apagar todo o histórico",
+    "history_delete_one": "Apagar",
+    "history_expiry": "O histórico expira automaticamente após 30 dias. Faça download dos resumos que quiser guardar antes desse prazo.",
+    "new_summary": "Novo resumo",
+    "provider_help_ollama": "Ollama roda localmente (sem API key). Gemini usa API do Google AI Studio.",
+    "provider_help_cloud": "Ollama indisponível neste ambiente. Use Gemini (API key) ou execute o projeto localmente para usar Ollama.",
+    "cloud_info": "Ambiente cloud — Ollama requer servidor local. Use **Gemini** com API key ou execute o projeto localmente para usar modelos gratuitos.",
+    "format_help": "TOON reduz ~5-15% de tokens removendo formatação visual. Markdown mantém emojis e timestamps (mais legível para a IA).",
+    "custom_model": "Outro (digite abaixo)",
+    "custom_model_placeholder": "Ex: llama3 ou gemini-3-flash-preview",
+    "no_models": "Nenhum modelo detectado",
+    "no_ollama": "Ollama não detectado. Se estiver rodando localmente, inicie com `ollama serve`. Se estiver na versão cloud (demo gratuita), use o provedor Gemini.",
+    "lang": "Idioma",
+    "source": "Fonte da conversa (opcional)",
+    "source_placeholder": "Ex: Gemini CLI, OpenCode, VS Code chat..."
+  },
+  "key": {
+    "title": "Chave da API",
+    "unlocked": "Chave desbloqueada",
+    "lock": "Bloquear",
+    "remove": "Remover",
+    "stored": "Chave criptografada salva",
+    "passphrase": "Senha mestra",
+    "passphrase_placeholder": "Digite sua senha para desbloquear",
+    "unlock": "Desbloquear",
+    "wrong_password": "Senha incorreta!",
+    "config_title": "Configurar chave",
+    "api_key_label": "API Key",
+    "api_key_placeholder": "sk-... ou AIza...",
+    "save_mode": "Modo de armazenamento",
+    "save_encrypted": "Salvar criptografada (recomendado)",
+    "save_session": "Apenas nesta sessão",
+    "create_passphrase": "Crie uma senha forte",
+    "save_button": "Salvar chave criptografada",
+    "use_session": "Usar nesta sessão",
+    "passphrase_too_short": "A senha mestra deve ter pelo menos 8 caracteres.",
+    "encrypt_info": "Sua chave é criptografada com uma senha mestra antes de ser salva. Apenas o blob criptografado fica armazenado — em conformidade com a LGPD."
+  },
+  "warnings": {
+    "gemini_credits_cloud": "API Gemini requer créditos pré-pagos. Adicione créditos no [AI Studio](https://aistudio.google.com/apikey).",
+    "gemini_credits_local": "⚠️ **Aviso importante:** O Google descontinuou o tier gratuito da API Gemini. Todas as requisições agora exigem **créditos pré-pagos** comprados no [AI Studio](https://aistudio.google.com/apikey). Recomendamos usar **Ollama** (modelos locais, sem custo).",
+    "no_api_key": "Configure uma chave de API para usar o provedor {provider}.",
+    "no_api_key_cloud": "No Streamlit Cloud, adicione `{env_key}` em App Settings → Secrets.",
+    "no_api_key_local": "Use o campo 🔑 Chave da API acima ou configure no .env.",
+    "select_model": "Selecione ou digite um modelo Ollama.",
+    "rate_limit": "Aguarde {seconds}s antes de gerar outro resumo."
+  },
+  "errors": {
+    "internal": "Erro interno ao processar. Tente novamente.",
+    "internal_prompt": "Erro interno ao gerar prompt. Tente novamente.",
+    "format_unrecognized": "Formato do arquivo '{file}' não reconhecido. Formatos suportados: {formats}.",
+    "no_messages": "Nenhuma mensagem relevante encontrada nos arquivos enviados.",
+    "too_many_messages": "Limite de {max} mensagens excedido ({found} encontradas). Divida em arquivos menores.",
+    "file_too_big": "Arquivo '{file}' excede o limite de 50 MB."
+  },
+  "chat": {
+    "files_sent": "{count} arquivo(s) enviado(s)",
+    "msg_extracted": "{count} mensagens extraídas",
+    "tokens_estimate": "{count} tokens (prompt + sistema)",
+    "tokens_preview": "~{count} tokens de conversa (formato: {fmt})",
+    "download_summary": "Baixar resumo .md",
+    "download_prompt": "Baixar prompt .md",
+    "generate_prompt": "Gerar prompt de continuidade",
+    "prompt_generated": "Prompt de continuidade gerado",
+    "generating_prompt": "Gerando prompt de continuidade...",
+    "generating_summary": "Gerando resumo...",
+    "empty_state": "👈 Faça upload de um ou mais arquivos (.json ou .md) de conversas com LLMs e clique em **Gerar Resumo** para começar."
+  },
+  "processing": {
+    "status_start": "Processando resumo em {chunks} trechos...",
+    "status_chunk": "Trecho {done}/{total}",
+    "status_merge": "Gerando resumo final..."
+  },
+  "footer": "[GitHub](https://github.com/EzuraWrath/llm-session-summarizer) · Ollama · Gemini · OpenAI · Anthropic · Streamlit"
+}

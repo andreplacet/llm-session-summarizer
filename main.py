@@ -1,5 +1,18 @@
 import streamlit as st
 
+from src.i18n import t, detect_language
+
+# ── Language detection ──
+if "lang" not in st.session_state:
+    qp_lang = st.query_params.get("lang")
+    if qp_lang and qp_lang in ("pt_BR", "en", "es"):
+        st.session_state["lang"] = qp_lang
+    else:
+        detect_language()
+        st.stop()
+
+lang = st.session_state["lang"]
+
 st.set_page_config(
     page_title="LLM Session Summarizer",
     page_icon="🔬",
@@ -23,83 +36,53 @@ a { color: #4285f4 !important; }
 col = st.columns([1, 3, 1])[1]
 
 with col:
+    # Lang selector
+    lang_labels = {"pt_BR": "Português", "en": "English", "es": "Español"}
+    selected = st.selectbox(
+        t("sidebar.lang", lang),
+        options=list(lang_labels.keys()),
+        format_func=lambda l: lang_labels[l],
+        index=list(lang_labels.keys()).index(lang),
+        key="lang_selector",
+    )
+    if selected != lang:
+        st.session_state["lang"] = selected
+        st.query_params["lang"] = selected
+        st.rerun()
+
     st.markdown("<br>", unsafe_allow_html=True)
     st.title("🔬 LLM Session Summarizer")
 
-    st.markdown("### Transforme conversas com IAs em conhecimento estruturado")
+    st.markdown(f"### {t('hero.title', lang)}")
 
-    st.page_link("pages/1_Summarizer.py", label="Abrir Summarizer", icon=":material/arrow_forward:")
+    st.page_link("pages/1_Summarizer.py", label=t("hero.cta", lang), icon=":material/arrow_forward:")
 
-    st.markdown("""
-    Faça upload de arquivos `.json` (Gemini CLI) ou `.md` (OpenCode) e escolha
-    entre **4 provedores** — Ollama, Gemini, OpenAI e Anthropic — para gerar
-    resumos estruturados em **6 seções** com streaming, downloads em markdown e
-    **formato TOON para economia de tokens**.
-    """)
+    st.markdown(t("hero.desc", lang))
 
     st.divider()
 
-    st.markdown("### 🚀 Como usar")
+    st.markdown(f"### 🚀 {t('howto.title', lang)}")
 
-    st.page_link("pages/1_Summarizer.py", label="1. Abra o Summarizer", icon=":material/arrow_forward:")
-    st.markdown("""
-    2. Escolha o provedor: **Ollama**, **Gemini**, **OpenAI** ou **Anthropic**
-    3. Escolha o formato do prompt: **Markdown** ou **⚡ TOON** (econômico)
-    4. Faça upload de um ou mais arquivos `.json` ou `.md` de conversas
-    5. Clique em **Gerar Resumo** e veja o streaming
-    6. Baixe o `.md` ou gere um **prompt de continuidade**
-    """)
+    st.page_link("pages/1_Summarizer.py", label=t("howto.step1", lang), icon=":material/arrow_forward:")
+    st.markdown(t("howto.steps", lang))
 
     st.divider()
 
-    st.markdown("### 🧩 Providers")
+    st.markdown(f"### 🧩 {t('providers.title', lang)}")
 
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("""
-        **🦙 Ollama**
-        - Modelos locais
-        - Zero custo · Zero API key
-        - Privacidade total
-        """)
-        st.markdown("""
-        **🔷 OpenAI**
-        - GPT-5.5 · GPT-5.4 · GPT-5.4 Mini
-        - Requer API key
-        - Fatia premium
-        """)
+        st.markdown(f"**🦙 {t('providers.ollama.name', lang)}**\n{t('providers.ollama.desc', lang)}")
+        st.markdown(f"**🔷 {t('providers.openai.name', lang)}**\n{t('providers.openai.desc', lang)}")
     with col2:
-        st.markdown("""
-        **🤖 Gemini**
-        - 2.0 Flash · 3.x Preview
-        - Requer API key
-        - Créditos pré-pagos
-        """)
-        st.markdown("""
-        **🧠 Anthropic**
-        - Claude Opus 4.8 · Sonnet 4.6 · Haiku 4.5
-        - Requer API key
-        - Contexto de 1M tokens
-        """)
+        st.markdown(f"**🤖 {t('providers.gemini.name', lang)}**\n{t('providers.gemini.desc', lang)}")
+        st.markdown(f"**🧠 {t('providers.anthropic.name', lang)}**\n{t('providers.anthropic.desc', lang)}")
 
     st.divider()
 
-    st.markdown("### ⚡ TOON — Economia de tokens")
-
-    st.markdown("""
-    O projeto suporta **TOON (Token-Oriented Object Notation)**, um formato de prompt
-    compacto que elimina emojis, markdown e timestamps — reduzindo **~10-15% de tokens**
-    por requisição sem alterar o conteúdo da conversa.
-
-    - **Markdown**: `### 🔥 Desenvolvedor _14:30:00_` → mais legível para a IA
-    - **TOON**: `role:user ts:14:30:00` → mais econômico, mesmo resultado
-    - Alterne entre os formatos no sidebar do Summarizer
-    - Contador de tokens visível antes e durante a geração
-    """)
+    st.markdown(f"### ⚡ {t('toon.title', lang)}")
+    st.markdown(t("toon.desc", lang))
 
     st.divider()
 
-    st.caption(
-        "[GitHub](https://github.com/EzuraWrath/llm-session-summarizer) · "
-        "Ollama · Gemini · OpenAI · Anthropic · Streamlit"
-    )
+    st.caption(t("footer", lang))
