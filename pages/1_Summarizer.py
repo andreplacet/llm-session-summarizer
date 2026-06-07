@@ -412,6 +412,10 @@ def _build_direct_prompt(conversation: ParsedConversation, fmt: str = "markdown"
 # ---------------------------------------------------------------------------
 # Processing pipeline
 # ---------------------------------------------------------------------------
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+MAX_TOTAL_MESSAGES = 500
+
+
 def _parse_all_files(uploaded_files) -> tuple[ParsedConversation, list[str]]:
     all_messages: list[Message] = []
     filenames: list[str] = []
@@ -419,6 +423,10 @@ def _parse_all_files(uploaded_files) -> tuple[ParsedConversation, list[str]]:
 
     for f in uploaded_files:
         filenames.append(f.name)
+        if f.size > MAX_UPLOAD_BYTES:
+            raise ValueError(
+                f"Arquivo '{f.name}' excede o limite de 50 MB."
+            )
         content_bytes = f.read()
         f.seek(0)
 
@@ -445,6 +453,12 @@ def _parse_all_files(uploaded_files) -> tuple[ParsedConversation, list[str]]:
 
     if not all_messages:
         raise ValueError("Nenhuma mensagem relevante encontrada nos arquivos enviados.")
+
+    if len(all_messages) > MAX_TOTAL_MESSAGES:
+        raise ValueError(
+            f"Limite de {MAX_TOTAL_MESSAGES} mensagens excedido "
+            f"({len(all_messages)} encontradas). Divida em arquivos menores."
+        )
 
     combined = ParsedConversation(messages=all_messages, metadata=metadata)
     return combined, filenames
@@ -748,10 +762,10 @@ with st.sidebar:
     )
 
     uploaded_files = st.file_uploader(
-        "📂 Upload JSON(s)",
+        "📂 Upload JSON(s) ou Markdown",
         type=["json", "md"],
         accept_multiple_files=True,
-        help="Formatos suportados: Gemini CLI (.json), OpenCode (.md)",
+        help="Formatos suportados: Gemini CLI (.json), OpenCode (.md). Limite: 50 MB por arquivo.",
     )
 
     session_title = st.text_input(

@@ -9,6 +9,7 @@ font = "monospace"
 [server]
 headless = true
 port = 8501
+maxUploadSize = 50
 
 [browser]
 gatherUsageStats = false
