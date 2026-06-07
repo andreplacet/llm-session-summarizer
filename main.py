@@ -36,19 +36,22 @@ a { color: #4285f4 !important; }
 col = st.columns([1, 3, 1])[1]
 
 with col:
-    # Lang selector
-    lang_labels = {"pt_BR": "Português", "en": "English", "es": "Español"}
-    selected = st.selectbox(
-        t("sidebar.lang", lang),
-        options=list(lang_labels.keys()),
-        format_func=lambda l: lang_labels[l],
-        index=list(lang_labels.keys()).index(lang),
-        key="lang_selector",
-    )
-    if selected != lang:
-        st.session_state["lang"] = selected
-        st.query_params["lang"] = selected
-        st.rerun()
+    # Lang selector — top-right, compact
+    _, lang_col = st.columns([5, 1])
+    with lang_col:
+        lang_labels = {"pt_BR": "PT", "en": "EN", "es": "ES"}
+        selected = st.selectbox(
+            "Idioma",
+            options=list(lang_labels.keys()),
+            format_func=lambda l: lang_labels[l],
+            index=list(lang_labels.keys()).index(lang),
+            label_visibility="collapsed",
+            key="lang_selector",
+        )
+        if selected != lang:
+            st.session_state["lang"] = selected
+            st.query_params["lang"] = selected
+            st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
     st.title("🔬 LLM Session Summarizer")
