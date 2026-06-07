@@ -306,7 +306,7 @@ def _save_key(provider_name: str, api_key: str, passphrase: str) -> None:
 
 def _delete_stored_key(provider_name: str) -> None:
     DB.delete_encrypted_key(provider_name)
-    st.session_state[f"api_key_{provider_name}"] = None
+    st.session_state.pop(f"api_key_{provider_name}", None)
 
 
 def _get_active_api_key(provider_name: str) -> str | None:
@@ -643,6 +643,7 @@ with st.sidebar:
             with col1:
                 if st.button("🔒 Bloquear", use_container_width=True, key=f"lock_{provider_name}"):
                     _lock_key(provider_name)
+                    st.session_state.pop(f"api_key_{provider_name}", None)
                     st.rerun()
             with col2:
                 if st.button("🗑️ Remover", use_container_width=True, key=f"delkey_{provider_name}"):
@@ -661,6 +662,7 @@ with st.sidebar:
             with col1:
                 if st.button("🔓 Desbloquear", use_container_width=True, key=f"unlockbtn_{provider_name}", disabled=not passphrase):
                     if _unlock_key(provider_name, passphrase):
+                        st.session_state.pop(f"unlock_{provider_name}", None)
                         st.rerun()
                     else:
                         st.error("Senha incorreta!")
@@ -705,6 +707,8 @@ with st.sidebar:
                             st.error("A senha mestra deve ter pelo menos 4 caracteres.")
                         else:
                             _save_key(provider_name, api_key_input, master_pass)
+                            st.session_state.pop(f"apikey_{provider_name}", None)
+                            st.session_state.pop(f"master_{provider_name}", None)
                             st.rerun()
                 else:
                     if st.button(
@@ -714,6 +718,7 @@ with st.sidebar:
                         disabled=not api_key_input,
                     ):
                         st.session_state[f"api_key_{provider_name}"] = api_key_input
+                        st.session_state.pop(f"apikey_{provider_name}", None)
                         st.rerun()
 
     # ── Model selector ──
