@@ -1,7 +1,7 @@
 # LLM Session Summarizer
 
 > Resumos estruturados e didáticos de conversas com IAs —
-> suporte a Gemini CLI (`.json`) e OpenCode (`.md`)
+> suporte a Gemini CLI (`.json`), OpenCode (`.md`) e formato TOON para economia de tokens
 
 ## Funcionalidades
 
@@ -39,6 +39,8 @@
 - Sidebar colapsável com seleção de provider, modelo e upload
 - Barra de progresso durante processamento de conversas longas
 - Indicador de streaming durante geração de resumo e prompt
+- **📦 Formato do prompt** selecionável: **Markdown** (emojis, timestamps) ou **⚡ TOON** (Token-Oriented Object Notation — ~10% menos tokens, sem overhead de formatação)
+- Contador de tokens estimados visível antes e durante a geração
 
 ## 🔐 Segurança e LGPD
 
@@ -130,6 +132,10 @@ streamlit run main.py
     │   └── opencode_md.py     # Parser para Markdown do OpenCode
     ├── prompts/
     │   └── templates.py       # Templates: sistema, chunk, merge, prompt de continuidade
+    ├── formatters/
+    │   ├── __init__.py         # Registro de formatters + estimate_tokens()
+    │   ├── markdown.py         # Formato rico (emojis, timestamps, ---)
+    │   └── toon.py             # Formato TOON (compacto, sem overhead visual)
     └── providers/
         ├── base.py            # AbstractProvider (interface async)
         ├── gemini.py          # Provider Gemini (google-genai SDK)
@@ -198,6 +204,43 @@ O parser (`OpenCodeMDParser`) automaticamente:
   - Code fences remanescentes após limpeza
 - Colapsa linhas em branco múltiplas
 - Normaliza para o formato interno `Message(role, text)`
+
+## Formato de prompt: Markdown vs TOON
+
+Antes de enviar a conversa para a LLM, o texto é formatado. O formato pode ser escolhido no sidebar:
+
+| Formato | Visual | Tokens (3 msgs) | Economia |
+|---|---|---|---|
+| **📝 Markdown** | `### 🔥 Desenvolvedor _14:30:00_` + `---` separators | ~68 tokens | baseline |
+| **⚡ TOON** | `role:user ts:14:30:00` sem emojis, sem markdown | ~61 tokens | **~10%** |
+
+**Exemplo da mesma conversa nos dois formatos:**
+
+Markdown:
+```
+### 🔥 Desenvolvedor  _14:30:00_
+Como faço para configurar o Marten outbox?
+
+---
+
+### 🤖 IA  _14:31:00_
+Para configurar o Marten outbox, você precisa:
+1. Instalar o pacote Marten
+2. Configurar o schema
+```
+
+TOON:
+```
+role:user ts:14:30:00
+Como faço para configurar o Marten outbox?
+
+role:ai ts:14:31:00
+Para configurar o Marten outbox, você precisa:
+1. Instalar o pacote Marten
+2. Configurar o schema
+```
+
+> **Nota:** A economia cresce com o número de mensagens (menos overhead por mensagem). Em conversas com 100+ mensagens, a redução pode chegar a **15%**. O formato TOON é focado em máquina (LLM) — o conteúdo da conversa em si não é alterado, apenas o "invólucro".
 
 ## Fluxo de processamento
 

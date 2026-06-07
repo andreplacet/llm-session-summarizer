@@ -20,6 +20,7 @@ from src.prompts.templates import SYSTEM_PROMPT
 from src.providers.gemini import AVAILABLE_MODELS as GEMINI_MODELS, MODEL_LABELS as GEMINI_LABELS, DEFAULT_MODEL as GEMINI_DEFAULT, GeminiProvider
 from src.providers.ollama import OllamaProvider
 from src.database import Database
+from src.formatters import FORMATTERS, estimate_tokens
 
 load_dotenv()
 
@@ -304,14 +305,11 @@ def _make_provider(provider_name: str, model_name: str):
 # ---------------------------------------------------------------------------
 # Prompt builders
 # ---------------------------------------------------------------------------
-def _build_conversation_text(messages: list[Message]) -> str:
-    lines: list[str] = []
-    for m in messages:
-        role = "🔥 Desenvolvedor" if m.role == "user" else "🤖 IA"
-        header = f"### {role}"
-        ts = m.timestamp.strftime("%H:%M:%S") if m.timestamp else "??:??:??"
-        lines.append(f"{header}  _{ts}_\n{m.text}")
-    return "\n\n---\n\n".join(lines)
+def _build_conversation_text(messages: list[Message], fmt: str = "markdown") -> tuple[str, int]:
+    formatter = FORMATTERS.get(fmt, FORMATTERS["markdown"])
+    text = formatter.format_messages(messages)
+    tokens = estimate_tokens(text)
+    return text, tokens
 
 
 _DIRECT_PROMPT = """Analise a conversa abaixo entre um desenvolvedor e uma IA e gere um resumo estruturado.
@@ -348,13 +346,18 @@ Gere o resumo final EXATAMENTE com as seguintes seções em markdown:
 Resumo final:"""
 
 
-def _build_direct_prompt(conversation: ParsedConversation) -> str:
-    return _DIRECT_PROMPT.format(
+def _build_direct_prompt(conversation: ParsedConversation, fmt: str = "markdown") -> tuple[str, int]:
+    conv_text, conv_tokens = _build_conversation_text(conversation.messages, fmt)
+    formatter = FORMATTERS.get(fmt, FORMATTERS["markdown"])
+    meta = formatter.format_metadata(conversation.metadata)
+    prompt = _DIRECT_PROMPT.format(
         start_time=conversation.metadata.get("startTime", "N/A"),
         last_updated=conversation.metadata.get("lastUpdated", "N/A"),
         msg_count=len(conversation.messages),
-        conversation_text=_build_conversation_text(conversation.messages),
+        conversation_text=conv_text,
     )
+    total_tokens = estimate_tokens(prompt) + estimate_tokens(SYSTEM_PROMPT)
+    return prompt, total_tokens
 
 
 # ---------------------------------------------------------------------------
@@ -398,7 +401,7 @@ def _parse_all_files(uploaded_files) -> tuple[ParsedConversation, list[str]]:
     return combined, filenames
 
 
-def _run_chunked_summary(provider, conversation, model_name, max_concurrent: int = 5) -> str:
+def _run_chunked_summary(provider, conversation, model_name, fmt: str = "markdown", max_concurrent: int = 5) -> str:
     """Process chunks with progress bar, then stream the merge."""
     import asyncio
 
@@ -414,7 +417,7 @@ def _run_chunked_summary(provider, conversation, model_name, max_concurrent: int
 
     async def _summarize_chunk(chunk_conv: ParsedConversation, idx: int) -> str:
         async with semaphore:
-            text = _build_conversation_text(chunk_conv.messages)
+            text, _ = _build_conversation_text(chunk_conv.messages, fmt)
             prompt = CHUNK_PROMPT.format(conversation_text=text)
             result = await provider.generate(
                 system_prompt="Você é um analista que resume conversas técnicas. Escreva em português do Brasil.",
@@ -449,7 +452,7 @@ def _run_chunked_summary(provider, conversation, model_name, max_concurrent: int
 
 
 def _handle_process(
-    provider, conversation, filenames, model_name, session_title
+    provider, conversation, filenames, model_name, session_title, fmt="markdown"
 ) -> None:
     msg_count = len(conversation.messages)
     sid = str(uuid.uuid4())
@@ -466,13 +469,14 @@ def _handle_process(
     with st.chat_message("assistant"):
         try:
             if msg_count <= CHUNK_SIZE:
-                prompt = _build_direct_prompt(conversation)
+                prompt, est_tokens = _build_direct_prompt(conversation, fmt)
+                st.caption(f"📊 ~{est_tokens} tokens (prompt + sistema)")
                 response = st.write_stream(
                     _async_iter_to_sync(provider, SYSTEM_PROMPT, prompt)
                 )
             else:
                 response = _run_chunked_summary(
-                    provider, conversation, model_name,
+                    provider, conversation, model_name, fmt,
                     max_concurrent=1 if isinstance(provider, OllamaProvider) else 5,
                 )
         except Exception as exc:
@@ -660,6 +664,17 @@ with st.sidebar:
     )
 
     can_process = uploaded_files and (provider_name == "ollama" or _get_active_api_key())
+
+    if uploaded_files:
+        try:
+            for f in uploaded_files:
+                f.seek(0)
+            conv, _ = _parse_all_files(uploaded_files)
+            preview, preview_tokens = _build_conversation_text(conv.messages, fmt_choice)
+            st.caption(f"📊 ~{preview_tokens} tokens de conversa (formato: {FORMATTERS[fmt_choice].label.split()[0]})")
+        except Exception:
+            pass
+
     process_btn = st.button(
         "🔍 Gerar Resumo",
         type="primary",
@@ -754,7 +769,7 @@ if process_btn and uploaded_files:
         else:
             provider = GeminiProvider(model=model_name, api_key=_get_active_api_key())
         conversation, filenames = _parse_all_files(uploaded_files)
-        _handle_process(provider, conversation, filenames, model_name, session_title)
+        _handle_process(provider, conversation, filenames, model_name, session_title, fmt_choice)
         st.rerun()
     except ValueError as exc:
         st.error(str(exc))
