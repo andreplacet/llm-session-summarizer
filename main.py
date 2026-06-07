@@ -31,7 +31,7 @@ with col:
     st.markdown("""
     Faça upload de arquivos `.json` (Gemini CLI) ou `.md` (OpenCode) das suas sessões com LLMs
     e receba um resumo didático em **6 seções** — com streaming em tempo real,
-    prompts de continuidade e downloads em markdown.
+    prompts de continuidade, downloads em markdown e **formato TOON para economia de tokens**.
     """)
 
     st.divider()
@@ -41,9 +41,10 @@ with col:
     st.markdown("""
     1. Vá para **Summarizer** no menu lateral →
     2. Selecione o provedor: **Ollama** (local, gratuito) ou **Gemini** (cloud)
-    3. Faça upload de um ou mais arquivos `.json` ou `.md` de conversas
-    4. Clique em **Gerar Resumo** e veja o streaming
-    5. Baixe o `.md` ou gere um **prompt de continuidade**
+    3. Escolha o formato do prompt: **Markdown** ou **⚡ TOON** (econômico)
+    4. Faça upload de um ou mais arquivos `.json` ou `.md` de conversas
+    5. Clique em **Gerar Resumo** e veja o streaming
+    6. Baixe o `.md` ou gere um **prompt de continuidade**
     """)
 
     st.divider()
@@ -67,6 +68,21 @@ with col:
         - Modelos 3.x preview
         - ⚠️ Créditos pré-pagos necessários
         """)
+
+    st.divider()
+
+    st.markdown("### ⚡ TOON — Economia de tokens")
+
+    st.markdown("""
+    O projeto suporta **TOON (Token-Oriented Object Notation)**, um formato de prompt
+    compacto que elimina emojis, markdown e timestamps — reduzindo **~10-15% de tokens**
+    por requisição sem alterar o conteúdo da conversa.
+
+    - **Markdown**: `### 🔥 Desenvolvedor _14:30:00_` → mais legível para a IA
+    - **TOON**: `role:user ts:14:30:00` → mais econômico, mesmo resultado
+    - Alterne entre os formatos no sidebar do Summarizer
+    - Contador de tokens visível antes e durante a geração
+    """)
 
     st.divider()
 
