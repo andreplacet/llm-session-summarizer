@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import sys
 import uuid
@@ -543,7 +544,11 @@ def _handle_process(
                     max_concurrent=1 if isinstance(provider, OllamaProvider) else 5,
                 )
         except Exception as exc:
-            response = f"❌ **Erro ao gerar resumo:** {exc}"
+            import logging
+            logging.getLogger("llm_summarizer").error(
+                "Erro ao gerar resumo", exc_info=True
+            )
+            response = "Erro interno ao processar. Tente novamente."
             st.error(response)
 
     # Save to session state
@@ -903,7 +908,11 @@ if process_btn and uploaded_files:
     except ValueError as exc:
         st.error(str(exc))
     except Exception as exc:
-        st.error(f"Erro inesperado: {exc}")
+        import logging
+        logging.getLogger("llm_summarizer").error(
+            "Erro inesperado ao processar", exc_info=True
+        )
+        st.error("Erro interno ao processar. Tente novamente.")
 
 if not st.session_state.messages and not uploaded_files:
     st.info(
@@ -966,7 +975,11 @@ em qualquer CLI de IA para continuar o trabalho imediatamente."""
                             type="prompt",
                         )
                 except Exception as exc:
-                    st.error(f"❌ Erro ao gerar prompt: {exc}")
+                    import logging
+                    logging.getLogger("llm_summarizer").error(
+                        "Erro ao gerar prompt de continuidade", exc_info=True
+                    )
+                    st.error("Erro interno ao gerar prompt. Tente novamente.")
 
     st.session_state["prompt_to_generate"] = None
     st.rerun()
