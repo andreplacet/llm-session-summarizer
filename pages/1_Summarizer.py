@@ -901,26 +901,34 @@ if st.session_state.messages:
         st.rerun()
 
 if process_btn and uploaded_files:
-    try:
-        if provider_name == "ollama":
-            provider = OllamaProvider(model=model_name)
-        elif provider_name == "openai":
-            provider = OpenAIProvider(model=model_name, api_key=_get_active_api_key("openai"))
-        elif provider_name == "anthropic":
-            provider = AnthropicProvider(model=model_name, api_key=_get_active_api_key("anthropic"))
-        else:
-            provider = GeminiProvider(model=model_name, api_key=_get_active_api_key("gemini"))
-        conversation, filenames = _parse_all_files(uploaded_files)
-        _handle_process(provider, conversation, filenames, model_name, session_title, fmt_choice)
-        st.rerun()
-    except ValueError as exc:
-        st.error(str(exc))
-    except Exception as exc:
-        import logging
-        logging.getLogger("llm_summarizer").error(
-            "Erro inesperado ao processar", exc_info=True
-        )
-        st.error("Erro interno ao processar. Tente novamente.")
+    import time
+    now = time.time()
+    last = st.session_state.get("_last_process_time", 0)
+    cooldown = 5
+    if now - last < cooldown:
+        st.warning(f"Aguarde {cooldown - int(now - last)}s antes de gerar outro resumo.")
+    else:
+        st.session_state["_last_process_time"] = now
+        try:
+            if provider_name == "ollama":
+                provider = OllamaProvider(model=model_name)
+            elif provider_name == "openai":
+                provider = OpenAIProvider(model=model_name, api_key=_get_active_api_key("openai"))
+            elif provider_name == "anthropic":
+                provider = AnthropicProvider(model=model_name, api_key=_get_active_api_key("anthropic"))
+            else:
+                provider = GeminiProvider(model=model_name, api_key=_get_active_api_key("gemini"))
+            conversation, filenames = _parse_all_files(uploaded_files)
+            _handle_process(provider, conversation, filenames, model_name, session_title, fmt_choice)
+            st.rerun()
+        except ValueError as exc:
+            st.error(str(exc))
+        except Exception as exc:
+            import logging
+            logging.getLogger("llm_summarizer").error(
+                "Erro inesperado ao processar", exc_info=True
+            )
+            st.error("Erro interno ao processar. Tente novamente.")
 
 if not st.session_state.messages and not uploaded_files:
     st.info(
