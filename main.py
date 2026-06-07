@@ -8,8 +8,8 @@ if "lang" not in st.session_state:
     if qp_lang and qp_lang in ("pt_BR", "en", "es"):
         st.session_state["lang"] = qp_lang
     else:
+        st.session_state["lang"] = "en"
         detect_language()
-        st.stop()
 
 lang = st.session_state["lang"]
 

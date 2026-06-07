@@ -10,7 +10,7 @@ LANG_MAP = {
     "es": "es", "es-ES": "es", "es-MX": "es",
 }
 
-FALLBACK = "pt_BR"
+FALLBACK = "en"
 
 
 def _load(lang: str):
@@ -49,9 +49,9 @@ def detect_language():
     st.html("""
     <script>
     if (!window.location.search.includes('lang=')) {
-        var lang = (navigator.language || 'pt-BR').split('-')[0];
+        var lang = (navigator.language || 'en').split('-')[0];
         var map = {pt: 'pt_BR', en: 'en', es: 'es'};
-        var code = map[lang] || 'pt_BR';
+        var code = map[lang] || 'en';
         window.location.search = '?lang=' + code;
     }
     </script>
