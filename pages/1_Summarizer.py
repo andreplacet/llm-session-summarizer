@@ -24,6 +24,8 @@ from src.parsers.opencode_md import OpenCodeMDParser
 from src.prompts.templates import SYSTEM_PROMPT
 from src.providers.gemini import AVAILABLE_MODELS as GEMINI_MODELS, MODEL_LABELS as GEMINI_LABELS, DEFAULT_MODEL as GEMINI_DEFAULT, GeminiProvider
 from src.providers.ollama import OllamaProvider
+from src.providers.openai import AVAILABLE_MODELS as OPENAI_MODELS, MODEL_LABELS as OPENAI_LABELS, DEFAULT_MODEL as OPENAI_DEFAULT, OpenAIProvider
+from src.providers.anthropic import AVAILABLE_MODELS as ANTHROPIC_MODELS, MODEL_LABELS as ANTHROPIC_LABELS, DEFAULT_MODEL as ANTHROPIC_DEFAULT, AnthropicProvider
 from src.database import Database
 from src.formatters import FORMATTERS, estimate_tokens
 
@@ -263,53 +265,62 @@ def _async_iter_to_sync(provider, system_prompt: str, user_prompt: str) -> Itera
 # ---------------------------------------------------------------------------
 # Key management (crypto + session state)
 # ---------------------------------------------------------------------------
-KEY_PROVIDER = "gemini"
+PROVIDER_ENV_VARS = {
+    "gemini": "GEMINI_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+}
 
 DB = Database()
 
 
-def _key_is_unlocked() -> bool:
-    return bool(st.session_state.get("api_key"))
+def _key_is_unlocked(provider_name: str) -> bool:
+    return bool(st.session_state.get(f"api_key_{provider_name}"))
 
 
-def _key_is_stored() -> bool:
-    return DB.has_encrypted_key(KEY_PROVIDER)
+def _key_is_stored(provider_name: str) -> bool:
+    return DB.has_encrypted_key(provider_name)
 
 
-def _unlock_key(passphrase: str) -> bool:
-    encrypted = DB.get_encrypted_key(KEY_PROVIDER)
+def _unlock_key(provider_name: str, passphrase: str) -> bool:
+    encrypted = DB.get_encrypted_key(provider_name)
     if not encrypted:
         return False
     try:
-        st.session_state.api_key = decrypt(encrypted, passphrase)
+        st.session_state[f"api_key_{provider_name}"] = decrypt(encrypted, passphrase)
         return True
     except ValueError:
         return False
 
 
-def _lock_key() -> None:
-    st.session_state.api_key = None
+def _lock_key(provider_name: str) -> None:
+    st.session_state[f"api_key_{provider_name}"] = None
 
 
-def _save_key(api_key: str, passphrase: str) -> None:
+def _save_key(provider_name: str, api_key: str, passphrase: str) -> None:
     encrypted = encrypt(api_key, passphrase)
-    DB.save_encrypted_key(KEY_PROVIDER, encrypted)
-    st.session_state.api_key = api_key
+    DB.save_encrypted_key(provider_name, encrypted)
+    st.session_state[f"api_key_{provider_name}"] = api_key
 
 
-def _delete_stored_key() -> None:
-    DB.delete_encrypted_key(KEY_PROVIDER)
-    st.session_state.api_key = None
+def _delete_stored_key(provider_name: str) -> None:
+    DB.delete_encrypted_key(provider_name)
+    st.session_state[f"api_key_{provider_name}"] = None
 
 
-def _get_active_api_key() -> str | None:
-    key = st.session_state.get("api_key")
+def _get_active_api_key(provider_name: str) -> str | None:
+    key = st.session_state.get(f"api_key_{provider_name}")
     if key:
         return key
-    key = st.secrets.get("GEMINI_API_KEY") if hasattr(st, "secrets") else None
-    if key:
-        return key
-    return os.getenv("GEMINI_API_KEY")
+    env_var = PROVIDER_ENV_VARS.get(provider_name, "")
+    if env_var:
+        key = st.secrets.get(env_var) if hasattr(st, "secrets") else None
+        if key:
+            return key
+        key = os.getenv(env_var)
+        if key:
+            return key
+    return None
 
 
 @st.cache_data(ttl=60)
@@ -333,7 +344,11 @@ def _check_ollama_reachable() -> bool:
 def _make_provider(provider_name: str, model_name: str):
     if provider_name == "ollama":
         return OllamaProvider(model=model_name)
-    return GeminiProvider(model=model_name, api_key=_get_active_api_key())
+    if provider_name == "openai":
+        return OpenAIProvider(model=model_name, api_key=_get_active_api_key("openai"))
+    if provider_name == "anthropic":
+        return AnthropicProvider(model=model_name, api_key=_get_active_api_key("anthropic"))
+    return GeminiProvider(model=model_name, api_key=_get_active_api_key("gemini"))
 
 
 # ---------------------------------------------------------------------------
@@ -571,7 +586,7 @@ with st.sidebar:
 
     provider_name = st.selectbox(
         "🤖 Provedor",
-        ["ollama", "gemini"],
+        ["ollama", "gemini", "openai", "anthropic"],
         index=_provider_index,
         help=_provider_help,
     )
@@ -583,54 +598,56 @@ with st.sidebar:
             "para usar modelos gratuitos."
         )
 
-    # ── Key management (only for Gemini) ──
-    if provider_name == "gemini":
-        if not _ollama_available:
-            st.warning(
-                "⚠️ **API Gemini requer créditos pré-pagos.** "
-                "Adicione créditos no [AI Studio](https://aistudio.google.com/apikey)."
-            )
-        else:
-            st.warning(
-                "⚠️ **Aviso importante:** O Google descontinuou o tier gratuito da API Gemini. "
-                "Todas as requisições agora exigem **créditos pré-pagos** comprados no "
-                "[AI Studio](https://aistudio.google.com/apikey). "
-                "Recomendamos usar **Ollama** (modelos locais, sem custo)."
-            )
+    # ── Key management (for providers that need API keys) ──
+    if provider_name != "ollama":
+        if provider_name == "gemini":
+            if not _ollama_available:
+                st.warning(
+                    "⚠️ **API Gemini requer créditos pré-pagos.** "
+                    "Adicione créditos no [AI Studio](https://aistudio.google.com/apikey)."
+                )
+            else:
+                st.warning(
+                    "⚠️ **Aviso importante:** O Google descontinuou o tier gratuito da API Gemini. "
+                    "Todas as requisições agora exigem **créditos pré-pagos** comprados no "
+                    "[AI Studio](https://aistudio.google.com/apikey). "
+                    "Recomendamos usar **Ollama** (modelos locais, sem custo)."
+                )
         st.subheader("🔑 Chave da API")
 
-        if _key_is_unlocked():
+        if _key_is_unlocked(provider_name):
             st.success("🔓 Chave desbloqueada")
-            masked = st.session_state.api_key[:6] + "•••" + st.session_state.api_key[-4:]
+            key_val = st.session_state.get(f"api_key_{provider_name}", "")
+            masked = key_val[:6] + "•••" + key_val[-4:] if len(key_val) > 10 else "••••"
             st.caption(f"`{masked}`")
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🔒 Bloquear", use_container_width=True):
-                    _lock_key()
+                if st.button("🔒 Bloquear", use_container_width=True, key=f"lock_{provider_name}"):
+                    _lock_key(provider_name)
                     st.rerun()
             with col2:
-                if st.button("🗑️ Remover", use_container_width=True):
-                    _delete_stored_key()
+                if st.button("🗑️ Remover", use_container_width=True, key=f"delkey_{provider_name}"):
+                    _delete_stored_key(provider_name)
                     st.rerun()
 
-        elif _key_is_stored():
+        elif _key_is_stored(provider_name):
             st.info("🔒 Chave criptografada salva")
             passphrase = st.text_input(
                 "Senha mestra",
                 type="password",
                 placeholder="Digite sua senha para desbloquear",
-                key="unlock_passphrase",
+                key=f"unlock_{provider_name}",
             )
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🔓 Desbloquear", use_container_width=True, disabled=not passphrase):
-                    if _unlock_key(passphrase):
+                if st.button("🔓 Desbloquear", use_container_width=True, key=f"unlockbtn_{provider_name}", disabled=not passphrase):
+                    if _unlock_key(provider_name, passphrase):
                         st.rerun()
                     else:
                         st.error("Senha incorreta!")
             with col2:
-                if st.button("🗑️ Remover", use_container_width=True):
-                    _delete_stored_key()
+                if st.button("🗑️ Remover", use_container_width=True, key=f"delkey2_{provider_name}"):
+                    _delete_stored_key(provider_name)
                     st.rerun()
 
         else:
@@ -639,43 +656,45 @@ with st.sidebar:
                 "antes de ser salva. Apenas o blob criptografado "
                 "fica armazenado — em conformidade com a LGPD."
             )
-            with st.expander("⚙️ Configurar chave", expanded=not _get_active_api_key()):
+            with st.expander("⚙️ Configurar chave", expanded=not _get_active_api_key(provider_name)):
                 api_key_input = st.text_input(
                     "API Key",
                     type="password",
                     placeholder="sk-... ou AIza...",
-                    key="api_key_input",
+                    key=f"apikey_{provider_name}",
                 )
                 save_mode = st.radio(
                     "Modo de armazenamento",
                     ["💾 Salvar criptografada (recomendado)", "⚡ Apenas nesta sessão"],
                     index=0,
-                    key="save_mode",
+                    key=f"savemode_{provider_name}",
                 )
                 if save_mode.startswith("💾"):
                     master_pass = st.text_input(
                         "Senha mestra",
                         type="password",
                         placeholder="Crie uma senha forte",
-                        key="master_pass",
+                        key=f"master_{provider_name}",
                     )
                     if st.button(
                         "💾 Salvar chave criptografada",
                         use_container_width=True,
+                        key=f"savebtn_{provider_name}",
                         disabled=not (api_key_input and master_pass),
                     ):
                         if len(master_pass) < 4:
                             st.error("A senha mestra deve ter pelo menos 4 caracteres.")
                         else:
-                            _save_key(api_key_input, master_pass)
+                            _save_key(provider_name, api_key_input, master_pass)
                             st.rerun()
                 else:
                     if st.button(
                         "⚡ Usar nesta sessão",
                         use_container_width=True,
+                        key=f"session_{provider_name}",
                         disabled=not api_key_input,
                     ):
-                        st.session_state.api_key = api_key_input
+                        st.session_state[f"api_key_{provider_name}"] = api_key_input
                         st.rerun()
 
     # ── Model selector ──
@@ -694,6 +713,12 @@ with st.sidebar:
                 "Se estiver rodando localmente, inicie com `ollama serve`. "
                 "Se estiver na versão cloud (demo gratuita), use o provedor Gemini."
             )
+    elif provider_name == "openai":
+        model_options = [f"{m}  ({OPENAI_LABELS.get(m, '')})" for m in OPENAI_MODELS] + ["✏️ Outro (digite abaixo)"]
+        default_idx = 0
+    elif provider_name == "anthropic":
+        model_options = [f"{m}  ({ANTHROPIC_LABELS.get(m, '')})" for m in ANTHROPIC_MODELS] + ["✏️ Outro (digite abaixo)"]
+        default_idx = 0
     else:
         model_options = [f"{m}  ({GEMINI_LABELS.get(m, '')})" for m in GEMINI_MODELS] + ["✏️ Outro (digite abaixo)"]
         default_idx = 0
@@ -734,7 +759,7 @@ with st.sidebar:
         placeholder="Ex: Sessão de desenvolvimento",
     )
 
-    can_process = uploaded_files and (provider_name == "ollama" or _get_active_api_key())
+    can_process = uploaded_files and (provider_name == "ollama" or _get_active_api_key(provider_name))
 
     if uploaded_files:
         try:
@@ -753,11 +778,14 @@ with st.sidebar:
         use_container_width=True,
     )
 
-    if uploaded_files and provider_name == "gemini" and not _get_active_api_key():
+    if uploaded_files and provider_name != "ollama" and not _get_active_api_key(provider_name):
+        provider_labels = {"gemini": "Gemini", "openai": "OpenAI", "anthropic": "Anthropic"}
+        provider_label = provider_labels.get(provider_name, "API")
+        env_key = PROVIDER_ENV_VARS.get(provider_name, "API_KEY")
         st.warning(
-            "Configure uma chave de API para usar o Gemini. "
+            f"Configure uma chave de API para usar o provedor {provider_label}. "
             + (
-                "No Streamlit Cloud, adicione `GEMINI_API_KEY` em App Settings → Secrets."
+                f"No Streamlit Cloud, adicione `{env_key}` em App Settings → Secrets."
                 if not _ollama_available
                 else "Use o campo 🔑 Chave da API acima ou configure no .env."
             )
@@ -849,8 +877,12 @@ if process_btn and uploaded_files:
     try:
         if provider_name == "ollama":
             provider = OllamaProvider(model=model_name)
+        elif provider_name == "openai":
+            provider = OpenAIProvider(model=model_name, api_key=_get_active_api_key("openai"))
+        elif provider_name == "anthropic":
+            provider = AnthropicProvider(model=model_name, api_key=_get_active_api_key("anthropic"))
         else:
-            provider = GeminiProvider(model=model_name, api_key=_get_active_api_key())
+            provider = GeminiProvider(model=model_name, api_key=_get_active_api_key("gemini"))
         conversation, filenames = _parse_all_files(uploaded_files)
         _handle_process(provider, conversation, filenames, model_name, session_title, fmt_choice)
         st.rerun()
