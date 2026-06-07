@@ -29,6 +29,7 @@ from src.providers.openai import AVAILABLE_MODELS as OPENAI_MODELS, MODEL_LABELS
 from src.providers.anthropic import AVAILABLE_MODELS as ANTHROPIC_MODELS, MODEL_LABELS as ANTHROPIC_LABELS, DEFAULT_MODEL as ANTHROPIC_DEFAULT, AnthropicProvider
 from src.database import Database
 from src.formatters import FORMATTERS, estimate_tokens
+from src.i18n import t
 
 load_dotenv()
 
