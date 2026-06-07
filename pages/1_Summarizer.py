@@ -288,12 +288,31 @@ def _delete_stored_key() -> None:
 
 
 def _get_active_api_key() -> str | None:
-    return st.session_state.get("api_key") or os.getenv("GEMINI_API_KEY")
+    key = st.session_state.get("api_key")
+    if key:
+        return key
+    key = st.secrets.get("GEMINI_API_KEY") if hasattr(st, "secrets") else None
+    if key:
+        return key
+    return os.getenv("GEMINI_API_KEY")
 
 
 @st.cache_data(ttl=60)
 def _get_ollama_models() -> list[str]:
     return asyncio.run(OllamaProvider.list_models())
+
+
+@st.cache_data(ttl=300)
+def _check_ollama_reachable() -> bool:
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(2)
+        result = s.connect_ex(("localhost", 11434))
+        s.close()
+        return result == 0
+    except Exception:
+        return False
 
 
 def _make_provider(provider_name: str, model_name: str):
@@ -523,12 +542,36 @@ with st.sidebar:
     st.divider()
 
     # ── Provider selector ──
+    _ollama_available = _check_ollama_reachable()
+
+    _provider_index = 0 if _ollama_available else 1
+    _provider_help = (
+        "Ollama roda localmente (sem API key). Gemini usa API do Google AI Studio."
+    )
+    if not _ollama_available:
+        _provider_help = (
+            "☁️ Ollama indisponível neste ambiente. "
+            "Use Gemini (API key) ou execute o projeto localmente para usar Ollama."
+        )
+
     provider_name = st.selectbox(
         "🤖 Provedor",
         ["ollama", "gemini"],
-        index=0,
-        help="Ollama roda localmente (sem API key). Gemini usa API do Google AI Studio.",
+        index=_provider_index,
+        help=_provider_help,
     )
+
+    if not _ollama_available:
+        st.info(
+            "🖥️ **Demo gratuita via Streamlit Cloud** — o servidor Ollama "
+            "não está disponível neste ambiente. "
+            "Para usar modelos locais (grátis, sem API key, privacidade total), "
+            "execute o projeto no seu computador:\n\n"
+            "```bash\ncd ~/dev/personal/python/llm-session-summarizer\n"
+            "source .venv/bin/activate\n"
+            "ollama serve  # em outro terminal\n"
+            "streamlit run main.py\n```"
+        )
 
     # ── Key management (only for Gemini) ──
     if provider_name == "gemini":
@@ -630,7 +673,11 @@ with st.sidebar:
         else:
             model_options = ["Nenhum modelo detectado", "✏️ Outro (digite abaixo)"]
             default_idx = 1
-            st.warning("Ollama não detectado. Certifique-se de que está rodando (`ollama serve`).")
+            st.warning(
+                "Ollama não detectado. "
+                "Se estiver rodando localmente, inicie com `ollama serve`. "
+                "Se estiver na versão cloud (demo gratuita), use o provedor Gemini."
+            )
     else:
         model_options = [f"{m}  ({GEMINI_LABELS.get(m, '')})" for m in GEMINI_MODELS] + ["✏️ Outro (digite abaixo)"]
         default_idx = 0
@@ -650,6 +697,14 @@ with st.sidebar:
         )
     else:
         model_name = model_choice.split("  ")[0]
+
+    fmt_choice = st.selectbox(
+        "📦 Formato do prompt",
+        options=list(FORMATTERS.keys()),
+        format_func=lambda k: FORMATTERS[k].label,
+        help="TOON reduz ~5-15% de tokens removendo formatação visual. "
+             "Markdown mantém emojis e timestamps (mais legível para a IA).",
+    )
 
     uploaded_files = st.file_uploader(
         "📂 Upload JSON(s)",
@@ -683,7 +738,14 @@ with st.sidebar:
     )
 
     if uploaded_files and provider_name == "gemini" and not _get_active_api_key():
-        st.warning("Configure uma chave de API para usar o Gemini.")
+        st.warning(
+            "Configure uma chave de API para usar o Gemini. "
+            + (
+                "No Streamlit Cloud, adicione `GEMINI_API_KEY` em App Settings → Secrets."
+                if not _ollama_available
+                else "Use o campo 🔑 Chave da API acima ou configure no .env."
+            )
+        )
     if uploaded_files and provider_name == "ollama" and not model_name:
         st.warning("Selecione ou digite um modelo Ollama.")
 

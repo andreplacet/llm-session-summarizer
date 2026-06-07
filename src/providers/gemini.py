@@ -38,8 +38,15 @@ class GeminiProvider(AbstractProvider):
         self.temperature = temperature
         api_key = api_key or os.getenv("GEMINI_API_KEY")
         if not api_key:
+            try:
+                import streamlit as _st
+                api_key = _st.secrets.get("GEMINI_API_KEY")
+            except Exception:
+                pass
+        if not api_key:
             raise ValueError(
-                "GEMINI_API_KEY não encontrada. Configure no .env ou passe explicitamente."
+                "GEMINI_API_KEY não encontrada. Configure no .env, "
+                "st.secrets (Cloud) ou passe explicitamente."
             )
         self._client = genai.Client(api_key=api_key)
 
