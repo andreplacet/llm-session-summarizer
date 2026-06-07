@@ -223,6 +223,10 @@ def _apply_theme(dark: bool) -> None:
 # Streaming bridge: async generator → sync iterator (thread + queue)
 # ---------------------------------------------------------------------------
 def _async_iter_to_sync(provider, system_prompt: str, user_prompt: str) -> Iterator[str]:
+    if hasattr(provider, "generate_stream_sync"):
+        yield from provider.generate_stream_sync(system_prompt, user_prompt)
+        return
+
     q: Queue = Queue()
 
     async def _run() -> None:
@@ -235,7 +239,13 @@ def _async_iter_to_sync(provider, system_prompt: str, user_prompt: str) -> Itera
             q.put(("done", None))
 
     def _target() -> None:
-        asyncio.run(_run())
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_run())
+        finally:
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.close()
 
     t = Thread(target=_target, daemon=True)
     t.start()

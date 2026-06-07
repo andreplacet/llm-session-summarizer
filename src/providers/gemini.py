@@ -1,5 +1,5 @@
 import os
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator, Iterator, Optional
 
 from google import genai
 
@@ -71,5 +71,14 @@ class GeminiProvider(AbstractProvider):
             config=self._build_config(system_prompt),
         )
         async for chunk in stream:
+            if chunk.text:
+                yield chunk.text
+
+    def generate_stream_sync(self, system_prompt: str, user_prompt: str) -> Iterator[str]:
+        for chunk in self._client.models.generate_content_stream(
+            model=self.model,
+            contents=user_prompt,
+            config=self._build_config(system_prompt),
+        ):
             if chunk.text:
                 yield chunk.text
