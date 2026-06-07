@@ -637,7 +637,7 @@ with st.sidebar:
         if _key_is_unlocked(provider_name):
             st.success("🔓 Chave desbloqueada")
             key_val = st.session_state.get(f"api_key_{provider_name}", "")
-            masked = key_val[:6] + "•••" + key_val[-4:] if len(key_val) > 10 else "••••"
+            masked = key_val[:4] + "••••" + key_val[-4:] if len(key_val) > 10 else "••••"
             st.caption(f"`{masked}`")
             col1, col2 = st.columns(2)
             with col1:
@@ -703,8 +703,8 @@ with st.sidebar:
                         key=f"savebtn_{provider_name}",
                         disabled=not (api_key_input and master_pass),
                     ):
-                        if len(master_pass) < 4:
-                            st.error("A senha mestra deve ter pelo menos 4 caracteres.")
+                        if len(master_pass) < 8:
+                            st.error("A senha mestra deve ter pelo menos 8 caracteres.")
                         else:
                             _save_key(provider_name, api_key_input, master_pass)
                             st.session_state.pop(f"apikey_{provider_name}", None)
@@ -753,12 +753,14 @@ with st.sidebar:
             "Nome do modelo",
             placeholder="Ex: llama3 ou gemini-3-flash-preview",
             key="custom_model",
+            max_chars=100,
         )
     elif model_choice == "Nenhum modelo detectado":
         model_name = st.text_input(
             "Nome do modelo",
             placeholder="llama3",
             key="custom_model2",
+            max_chars=100,
         )
     else:
         model_name = model_choice.split("  ")[0]
@@ -781,6 +783,7 @@ with st.sidebar:
     session_title = st.text_input(
         "📝 Título da sessão",
         placeholder="Ex: Sessão de desenvolvimento",
+        max_chars=200,
     )
 
     can_process = uploaded_files and (provider_name == "ollama" or _get_active_api_key(provider_name))
