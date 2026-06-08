@@ -2,7 +2,9 @@
   "hero": {
     "title": "Transforma conversaciones con IA en conocimiento estructurado",
     "cta": "Abrir Summarizer",
-    "desc": "Sube archivos `.json` (Gemini CLI) o `.md` (OpenCode) y elige entre **4 proveedores** — Ollama, Gemini, OpenAI y Anthropic — para generar resúmenes estructurados en **6 secciones** con streaming, descargas en markdown y **formato TOON para ahorro de tokens**."
+    "desc": "Sube archivos `.json` (Gemini CLI) o `.md` (OpenCode) y elige entre **4 proveedores** — Ollama, Gemini, OpenAI y Anthropic — para generar resúmenes estructurados en **6 secciones** con streaming, descargas en markdown y **formato TOON para ahorro de tokens**.",
+    "tagline": "Tus conversas con IA se convierten en documentación reutilizable",
+    "subtitle": "Cada sesión con ChatGPT, Claude o Gemini es una mentoría, sesión de debug o pair programming que produce conocimiento real. Esta plataforma transforma esas conversaciones en resúmenes estructurados — buscables, compartibles y listos para continuar el trabajo."
   },
   "howto": {
     "title": "Cómo usar",
