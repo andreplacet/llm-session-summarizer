@@ -1,7 +1,12 @@
 import asyncio
 
 from src.models import ParsedConversation
-from src.prompts.templates import CHUNK_PROMPT, MERGE_PROMPT, SYSTEM_PROMPT
+from src.prompts.templates import (
+    CHUNK_PROMPT,
+    get_chunk_system_prompt,
+    get_merge_prompt,
+    get_system_prompt,
+)
 from src.providers.base import AbstractProvider
 
 CHUNK_SIZE = 10
@@ -20,30 +25,33 @@ async def summarize_conversation(
     provider: AbstractProvider,
     conversation: ParsedConversation,
     progress_callback=None,
+    lang: str = "en",
 ) -> str:
     total = len(conversation.messages)
 
     if total == 0:
-        return "Nenhuma mensagem encontrada na conversa."
+        return "No messages found in the conversation."
 
     if total <= CHUNK_SIZE:
         text = _build_conversation_text(conversation)
         prompt = (
-            f"Analise a conversa abaixo e gere um resumo estruturado.\n\n"
-            f"**Metadados:** Sessão iniciada em {conversation.metadata.get('startTime', 'N/A')}\n\n"
-            f"Conversa:\n{text}"
+            f"Analyze the conversation below and generate a structured summary.\n\n"
+            f"**Metadata:** Session started at {conversation.metadata.get('startTime', 'N/A')}\n\n"
+            f"Conversation:\n{text}"
         )
         return await provider.generate(
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=get_system_prompt(lang),
             user_prompt=prompt,
         )
 
     chunks = _split_into_chunks(conversation)
 
+    chunk_system_prompt = get_chunk_system_prompt(lang)
+
     async def _summarize_chunk(idx: int, chunk: ParsedConversation) -> str:
         text = _build_conversation_text(chunk)
         result = await provider.generate(
-            system_prompt="Você é um analista que resume conversas técnicas. Escreva em português do Brasil.",
+            system_prompt=chunk_system_prompt,
             user_prompt=CHUNK_PROMPT.format(conversation_text=text),
         )
         return f"--- Trecho {idx + 1} de {len(chunks)} ---\n{result}"
@@ -55,9 +63,9 @@ async def summarize_conversation(
     if progress_callback:
         progress_callback(len(chunks), len(chunks))
 
-    merge_prompt = MERGE_PROMPT.format(partial_summaries="\n\n".join(summaries))
+    merge_prompt = get_merge_prompt(lang).format(partial_summaries="\n\n".join(summaries))
     return await provider.generate(
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=get_system_prompt(lang),
         user_prompt=merge_prompt,
     )
 
