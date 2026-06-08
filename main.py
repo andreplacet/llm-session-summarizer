@@ -28,9 +28,9 @@ st.markdown(
 h1, h2, h3, p, li { color: #e0e0e0 !important; }
 code { background-color: #1e1e2e !important; color: #cdd6f4 !important; }
 a { color: #4285f4 !important; }
-.stButton > button[kind="primary"] { background-color: #22c55e !important; border-color: #16a34a !important; }
-.stButton > button[kind="primary"]:hover { background-color: #16a34a !important; }
 [data-testid="stSidebarCollapseButton"] { top: 50vh; transform: translateY(-50%); }
+.stPageLink { transition: color 0.15s ease; }
+.stPageLink:hover { color: #34d399 !important; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -68,15 +68,11 @@ with col:
         "📥 Download .md  ·  🤖 Prompt de continuidade  ·  ⚡ TOON"
     )
 
-    if st.button(t("hero.cta", lang), type="primary", use_container_width=True):
-        st.switch_page("pages/1_Summarizer.py")
-
     st.divider()
 
     st.markdown(f"### 🚀 {t('howto.title', lang)}")
 
-    if st.button(t("howto.step1", lang), type="primary", use_container_width=True, key="step1"):
-        st.switch_page("pages/1_Summarizer.py")
+    st.page_link("pages/1_Summarizer.py", label=t("howto.step1", lang), icon=":material/arrow_forward:")
     st.markdown(t("howto.steps", lang))
 
     st.divider()
