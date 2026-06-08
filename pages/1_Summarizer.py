@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
 import uuid
 from datetime import datetime
@@ -594,7 +595,7 @@ def _handle_process(
         }
     )
     st.session_state.messages.append(
-        {"role": "assistant", "content": response, "is_prompt": False, "sid": sid}
+        {"role": "assistant", "content": response, "is_prompt": False, "sid": sid, "title": session_title}
     )
 
     # Persist to DB
@@ -872,7 +873,7 @@ with st.sidebar:
                                     f"📂 {row['filenames']} ({row['message_count']} mensagens)"
                                 ),
                             },
-                            {"role": "assistant", "content": content},
+                            {"role": "assistant", "content": content, "sid": row["id"], "title": row["title"]},
                         ]
                         st.rerun()
             with c2:
@@ -897,6 +898,15 @@ st.title(t("sidebar.title", lang))
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+
+def _safe_filename(title: str, is_prompt: bool = False) -> str:
+    sanitized = re.sub(r'[\\/*?:"<>|\n\r\t]', '', title or "").strip()
+    sanitized = re.sub(r'\s+', '_', sanitized)[:50].strip('_')
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    base = sanitized or ("prompt" if is_prompt else "resumo")
+    return f"{base}_{date_str}.md"
+
+
 for idx, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -904,10 +914,7 @@ for idx, msg in enumerate(st.session_state.messages):
     if msg["role"] == "assistant" and msg["content"] and not msg["content"].startswith("❌"):
         is_prompt = msg.get("is_prompt", False)
         label = t("chat.download_prompt", lang) if is_prompt else t("chat.download_summary", lang)
-
-        sanitized = msg["content"].replace("`", "").replace("#", "").replace("*", "").strip()
-        filename = (sanitized[:40] + "...") if len(sanitized) > 40 else sanitized
-        filename = (filename or ("prompt" if is_prompt else "resumo")) + ".md"
+        filename = _safe_filename(msg.get("title", ""), is_prompt)
 
         col1, col2 = st.columns([1, 2])
         with col1:
