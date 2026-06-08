@@ -75,8 +75,7 @@ with col:
 
     st.markdown(f"### 🚀 {t('howto.title', lang)}")
 
-    if st.button(t("howto.step1", lang), type="primary", use_container_width=True, key="step1"):
-        st.switch_page("pages/1_Summarizer.py")
+    st.page_link("pages/1_Summarizer.py", label=t("howto.step1", lang), icon=":material/arrow_forward:")
     st.markdown(t("howto.steps", lang))
 
     st.divider()
