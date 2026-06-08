@@ -56,11 +56,16 @@ with col:
     st.markdown("<br>", unsafe_allow_html=True)
     st.title("🔬 LLM Session Summarizer")
 
-    st.markdown(f"### {t('hero.title', lang)}")
+    st.markdown(f"### 🚀 {t('hero.tagline', lang)}")
+
+    st.markdown(t("hero.subtitle", lang))
+
+    st.caption(
+        "⚡ 4 provedores  ·  6 secoes por resumo  ·  Streaming token a token  ·  "
+        "📥 Download .md  ·  🤖 Prompt de continuidade  ·  ⚡ TOON"
+    )
 
     st.page_link("pages/1_Summarizer.py", label=t("hero.cta", lang), icon=":material/arrow_forward:")
-
-    st.markdown(t("hero.desc", lang))
 
     st.divider()
 
