@@ -22,7 +22,16 @@ from src.models import ParsedConversation, Message
 from src.parsers.base import AbstractParser
 from src.parsers.gemini_cli import GeminiCLIParser
 from src.parsers.opencode_md import OpenCodeMDParser
-from src.prompts.templates import SYSTEM_PROMPT
+from src.prompts.templates import (
+    CHUNK_PROMPT,
+    OUTPUT_LANG,
+    SECTION_HEADERS,
+    get_chunk_system_prompt,
+    get_continuity_prompt,
+    get_continuity_system_prompt,
+    get_merge_prompt,
+    get_system_prompt,
+)
 from src.providers.gemini import AVAILABLE_MODELS as GEMINI_MODELS, MODEL_LABELS as GEMINI_LABELS, DEFAULT_MODEL as GEMINI_DEFAULT, GeminiProvider
 from src.providers.ollama import OllamaProvider
 from src.providers.openai import AVAILABLE_MODELS as OPENAI_MODELS, MODEL_LABELS as OPENAI_LABELS, DEFAULT_MODEL as OPENAI_DEFAULT, OpenAIProvider
@@ -382,51 +391,60 @@ def _build_conversation_text(messages: list[Message], fmt: str = "markdown") -> 
     return text, tokens
 
 
-_DIRECT_PROMPT = """Analise a conversa abaixo entre um desenvolvedor e uma IA e gere um resumo estruturado.
+def _get_direct_prompt(
+    lang: str,
+    start_time: str,
+    last_updated: str,
+    msg_count: int,
+    conversation_text: str,
+) -> str:
+    h = SECTION_HEADERS.get(lang, SECTION_HEADERS["en"])
+    return f"""Analyze the conversation below between a developer and an AI and generate a structured summary.
 
-**Metadados da sessão:**
-- Início: {start_time}
-- Última atualização: {last_updated}
-- Total de mensagens relevantes: {msg_count}
+**Session metadata:**
+- Start: {start_time}
+- Last updated: {last_updated}
+- Relevant messages: {msg_count}
 
-**Conversa:**
+**Conversation:**
 
 {conversation_text}
 
-Gere o resumo final EXATAMENTE com as seguintes seções em markdown:
+Before writing the sections, internally identify the domain, theme, developer role, and technologies involved (do not include this in the output). Use this analysis to calibrate each section with the appropriate tone: didactic where fundamentals are lacking, assertive where there is clarity, cautious with uncertainties, prudent about trade-offs, critical on blind spots.
 
-## 1. Visão Geral
-[2-3 parágrafos resumindo sobre o que foi a sessão inteira, o contexto do projeto e o objetivo principal do desenvolvedor]
+Generate the final summary EXACTLY with the following sections in markdown:
 
-## 2. Tópicos Abordados
-[Lista com bullets dos temas técnicos discutidos, organizados do mais ao menos relevante]
+## {h['visao_geral']}
+[2-3 paragraphs summarizing what the entire session was about, the project context, and the developer's main goal]
 
-## 3. Aprendizados-Chave
-[O que foi aprendido de mais importante — conceitos, técnicas, padrões, boas práticas, armadilhas evitadas]
+## {h['topicos']}
+[Bulleted list of technical topics discussed, ordered from most to least relevant]
 
-## 4. Decisões e Encaminhamentos
-[O que ficou decidido, quais arquivos foram criados ou modificados, qual direção técnica foi tomada e por quê]
+## {h['aprendizados']}
+[The most important things learned — concepts, techniques, patterns, best practices, pitfalls avoided]
 
-## 5. Reflexões e Pontos Cegos
-[O que poderia ter sido abordado e não foi, riscos não considerados, alternativas não exploradas, possíveis melhorias na abordagem]
+## {h['decisoes']}
+[What was decided, which files were created or modified, which technical direction was taken and why]
 
-## 6. Próximos Passos Sugeridos
-[Recomendações concretas e acionáveis do que fazer a seguir, baseado no que foi discutido]
+## {h['reflexoes']}
+[What could have been addressed but wasn't, unconsidered risks, unexplored alternatives, possible improvements in approach]
 
-Resumo final:"""
+## {h['proximos_passos']}
+[Concrete, actionable recommendations for what to do next, based on what was discussed]
+
+Final summary:"""
 
 
-def _build_direct_prompt(conversation: ParsedConversation, fmt: str = "markdown") -> tuple[str, int]:
+def _build_direct_prompt(conversation: ParsedConversation, fmt: str = "markdown", lang: str = "en") -> tuple[str, int]:
     conv_text, conv_tokens = _build_conversation_text(conversation.messages, fmt)
-    formatter = FORMATTERS.get(fmt, FORMATTERS["markdown"])
-    meta = formatter.format_metadata(conversation.metadata)
-    prompt = _DIRECT_PROMPT.format(
+    prompt = _get_direct_prompt(
+        lang=lang,
         start_time=conversation.metadata.get("startTime", "N/A"),
         last_updated=conversation.metadata.get("lastUpdated", "N/A"),
         msg_count=len(conversation.messages),
         conversation_text=conv_text,
     )
-    total_tokens = estimate_tokens(prompt) + estimate_tokens(SYSTEM_PROMPT)
+    total_tokens = estimate_tokens(prompt) + estimate_tokens(get_system_prompt(lang))
     return prompt, total_tokens
 
 
@@ -485,15 +503,16 @@ def _parse_all_files(uploaded_files) -> tuple[ParsedConversation, list[str]]:
     return combined, filenames
 
 
-def _run_chunked_summary(provider, conversation, model_name, fmt: str = "markdown", max_concurrent: int = 5) -> str:
+def _run_chunked_summary(provider, conversation, model_name, fmt: str = "markdown", max_concurrent: int = 5, lang: str = "en") -> str:
     """Process chunks with progress bar, then stream the merge."""
     import asyncio
 
     from src.chunker import _split_into_chunks
-    from src.prompts.templates import CHUNK_PROMPT, MERGE_PROMPT
 
     chunks = _split_into_chunks(conversation)
     total_chunks = len(chunks)
+
+    chunk_system_prompt = get_chunk_system_prompt(lang)
 
     semaphore = asyncio.Semaphore(max_concurrent)
     completed = {"count": 0}
@@ -503,7 +522,7 @@ def _run_chunked_summary(provider, conversation, model_name, fmt: str = "markdow
             text, _ = _build_conversation_text(chunk_conv.messages, fmt)
             prompt = CHUNK_PROMPT.format(conversation_text=text)
             result = await provider.generate(
-                system_prompt="Você é um analista que resume conversas técnicas. Escreva em português do Brasil.",
+                system_prompt=chunk_system_prompt,
                 user_prompt=prompt,
             )
             completed["count"] += 1
@@ -520,10 +539,10 @@ def _run_chunked_summary(provider, conversation, model_name, fmt: str = "markdow
         partial_summaries = asyncio.run(_run_all())
         s.update(label=t("processing.status_merge", lang), state="running")
 
-    merge_prompt = MERGE_PROMPT.format(partial_summaries="\n\n".join(partial_summaries))
+    merge_prompt = get_merge_prompt(lang).format(partial_summaries="\n\n".join(partial_summaries))
 
     response = st.write_stream(
-        _async_iter_to_sync(provider, SYSTEM_PROMPT, merge_prompt)
+        _async_iter_to_sync(provider, get_system_prompt(lang), merge_prompt)
     )
 
     return response
@@ -547,16 +566,17 @@ def _handle_process(
     with st.chat_message("assistant"):
         try:
             if msg_count <= CHUNK_SIZE:
-                prompt, est_tokens = _build_direct_prompt(conversation, fmt)
+                prompt, est_tokens = _build_direct_prompt(conversation, fmt, lang=lang)
                 st.caption(t("chat.tokens_estimate", lang, count=est_tokens))
                 with st.spinner(t("chat.generating_summary", lang)):
                     response = st.write_stream(
-                        _async_iter_to_sync(provider, SYSTEM_PROMPT, prompt)
+                        _async_iter_to_sync(provider, get_system_prompt(lang), prompt)
                     )
             else:
                 response = _run_chunked_summary(
                     provider, conversation, model_name, fmt,
                     max_concurrent=1 if isinstance(provider, OllamaProvider) else 5,
+                    lang=lang,
                 )
         except Exception as exc:
             import logging
@@ -963,25 +983,7 @@ if st.session_state.get("prompt_to_generate") is not None:
         _source = st.session_state.get(f"src_{_gen_idx}", "")
         _provider = _make_provider(provider_name, model_name)
 
-        _source_line = f"- **Ferramenta alvo**: {_source}" if _source else ""
-
-        _prompt_for_llm = f"""Com base no resumo abaixo de uma conversa entre desenvolvedor e IA,
-gere um PROMPT DE CONTINUAÇÃO otimizado para uso em CLIs de IA (Gemini CLI, OpenCode, etc.).
-
-O prompt deve seguir esta estrutura:
-
-- **Contexto**: resumo do que já foi feito (1 parágrafo)
-- **Objetivo**: o que fazer a seguir, claro e específico
-- **Restrições**: stack, linguagem, padrões, estilo (se mencionado)
-- **Tarefas**: lista de passos concretos e acionáveis
-{_source_line}
-
-Resumo da conversa:
-{_summary}
-
-Gere APENAS o prompt final (sem explicações), formatado em markdown.
-O prompt deve ser autocontido — o dev deve conseguir copiá-lo e colar
-em qualquer CLI de IA para continuar o trabalho imediatamente."""
+        _prompt_for_llm = get_continuity_prompt(lang, _summary, _source)
 
         with st.chat_message("assistant"):
             with st.spinner(f"🤖 {t('chat.generating_prompt', lang)}"):
@@ -989,9 +991,7 @@ em qualquer CLI de IA para continuar o trabalho imediatamente."""
                     response = st.write_stream(
                         _async_iter_to_sync(
                             _provider,
-                            "Você é um gerador de prompts para IAs. "
-                            "Seu trabalho é criar prompts estruturados, acionáveis e autocontidos. "
-                            "Escreva em português do Brasil.",
+                            get_continuity_system_prompt(lang),
                             _prompt_for_llm,
                         )
                     )
