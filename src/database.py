@@ -106,7 +106,7 @@ class Database:
     def get_summary(self, session_id: str) -> Optional[str]:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT content FROM summaries WHERE session_id = ? ORDER BY created_at DESC LIMIT 1",
+                "SELECT content FROM summaries WHERE session_id = ? AND type = 'summary' ORDER BY created_at DESC LIMIT 1",
                 (session_id,),
             ).fetchone()
             return row["content"] if row else None
